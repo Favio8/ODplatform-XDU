@@ -1,0 +1,10 @@
+experiment:
+  name: rsod-train-example
+data:
+  source: data/RSOD/raw
+  target: data/RSOD/yolo
+model:
+  weights: models/pretrained/yolo11n.pt
+train:
+  epochs: 100
+  image_size: 640

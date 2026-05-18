@@ -1,0 +1,8 @@
+experiment:
+  name: rsod-infer-example
+data:
+  source: data/RSOD/yolo
+model:
+  checkpoint: models/checkpoints/latest.pt
+inference:
+  conf_threshold: 0.25

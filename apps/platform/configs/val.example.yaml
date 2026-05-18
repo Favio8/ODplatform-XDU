@@ -1,0 +1,8 @@
+experiment:
+  name: rsod-val-example
+data:
+  source: data/RSOD/yolo
+model:
+  checkpoint: models/checkpoints/latest.pt
+validation:
+  batch_size: 16

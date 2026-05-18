@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "odp-platform"
+version = "0.1.0"
+description = "Core engine package for ODPlatform."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = { text = "MIT" }
+authors = [{ name = "ODPlatform Team" }]
+dependencies = []
+
+[project.scripts]
+odp-trans = "odp_platform.cli.trans:main"
+odp-validate = "odp_platform.cli.validate:main"
+odp-train = "odp_platform.cli.train:main"
+odp-val = "odp_platform.cli.val:main"
+odp-infer = "odp_platform.cli.infer:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/odp_platform"]
