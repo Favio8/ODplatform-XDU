@@ -1,23 +1,59 @@
+# ODPlatform - platform 端配置
+
 [build-system]
-requires = ["hatchling>=1.27.0"]
+requires = ["hatchling>=1.18.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "odp-platform"
-version = "0.1.0"
-description = "Core engine package for ODPlatform."
+dynamic = ["version"]
+description = "ODPlatform - 目标检测开发平台核心引擎"
 readme = "README.md"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "ODPlatform Team" }]
-dependencies = []
+authors = [
+  { name = "Favio8", email = "favio9758@gmail.com" },
+]
+keywords = [
+  "ODPlatform",
+  "OD",
+  "目标检测开发平台核心引擎",
+  "目标检测",
+  "目标检测开发平台",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "colorlog>=6.7.0",
+  "pyyaml>=6.0",
+  "pydantic>=2.4.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4.0",
+  "pytest-cov>=4.1.0",
+  "pytest-xdist>=3.3.1",
+  "mypy>=1.5.1",
+  "ruff>=0.1.0",
+]
 
 [project.scripts]
 odp-trans = "odp_platform.cli.trans:main"
 odp-validate = "odp_platform.cli.validate:main"
+odp-init-project = "odp_platform.cli.init_project:main"
 odp-train = "odp_platform.cli.train:main"
 odp-val = "odp_platform.cli.val:main"
 odp-infer = "odp_platform.cli.infer:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/odp_platform"]
+
+[tool.hatch.version]
+path = "src/odp_platform/_version.py"
