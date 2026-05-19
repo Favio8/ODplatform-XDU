@@ -50,6 +50,8 @@ htmlcov/
 
 # 数据集不进 git(走外部存储或 Git LFS)
 data/raw/
+data/RSOD/raw/*
+!data/RSOD/raw/.gitkeep
 data/train/
 data/val/
 data/test/
@@ -75,6 +77,7 @@ apps/platform/logging/
 tmp/
 temp/
 题目说明.md
+老师提供的文档/
 
 # ============================================================
 # 大文件 / 二进制
