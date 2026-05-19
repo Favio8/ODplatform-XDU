@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from textwrap import dedent
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PLATFORM_SRC_DIR = ROOT / "apps" / "platform" / "src"
+
+
+def load_workspace_template(relative_path: str, fallback: str) -> str:
+    target = ROOT / relative_path
+    if target.exists():
+        return target.read_text(encoding="utf-8")
+    return fallback
 
 DIRS = [
     "apps/platform/src/odp_platform/common",
@@ -39,37 +48,40 @@ DIRS = [
 
 FILES = {
     ".odp-workspace": "",
-    "README.md": """
-    # ODPlatform
+    "README.md": load_workspace_template(
+        "README.md",
+        """
+        # ODPlatform
 
-    ODPlatform is a monorepo for a general-purpose object detection development platform.
-    The current milestone focuses on repository bootstrap, package structure, and Git workflow.
+        ODPlatform is a monorepo for a general-purpose object detection development platform.
+        The current milestone focuses on repository bootstrap, package structure, and Git workflow.
 
-    ## Workspace Layout
+        ## Workspace Layout
 
-    - `apps/platform`: core Python application and CLI entrypoints
-    - `apps/web-backend`: placeholder for a future web backend
-    - `apps/web-frontend`: placeholder for a future web frontend
-    - `apps/desktop`: placeholder for a future desktop client
-    - `docs`: architecture, teaching, and project-level documentation
-    - `data`: dataset layout skeleton
-    - `models`: pretrained weights and checkpoints skeleton
-    - `runs`: experiment outputs (ignored by Git)
+        - `apps/platform`: core Python application and CLI entrypoints
+        - `apps/web-backend`: placeholder for a future web backend
+        - `apps/web-frontend`: placeholder for a future web frontend
+        - `apps/desktop`: placeholder for a future desktop client
+        - `docs`: architecture, teaching, and project-level documentation
+        - `data`: dataset layout skeleton
+        - `models`: pretrained weights and checkpoints skeleton
+        - `runs`: experiment outputs (ignored by Git)
 
-    ## Quick Start
+        ## Quick Start
 
-    ```powershell
-    conda activate odplatform-gpu
-    python scripts/init_workspace.py
-    ```
+        ```powershell
+        conda activate odplatform-gpu
+        python scripts/init_workspace.py
+        ```
 
-    ## Git Workflow
+        ## Git Workflow
 
-    - Default branch: `main`
-    - Feature branches: `feature/<topic>`
-    - Documentation branches: `docs/<topic>`
-    - Fix branches: `fix/<topic>`
-    """,
+        - Default branch: `main`
+        - Feature branches: `feature/<topic>`
+        - Documentation branches: `docs/<topic>`
+        - Fix branches: `fix/<topic>`
+        """,
+    ),
     "LICENSE": """
     MIT License
 
@@ -189,6 +201,13 @@ FILES = {
     if __name__ == "__main__":
         raise SystemExit(main())
     """,
+    "scripts/init_project.py": load_workspace_template(
+        "scripts/init_project.py",
+        """
+        #!/usr/bin/env python
+        \"\"\"Development wrapper for the platform init-project CLI.\"\"\"
+        """,
+    ),
     "apps/platform/README.md": """
     # Platform App
 
@@ -196,31 +215,34 @@ FILES = {
     It owns the layered package structure for configuration, data processing,
     training orchestration, evaluation orchestration, and inference orchestration.
     """,
-    "apps/platform/pyproject.toml": """
-    [build-system]
-    requires = ["hatchling>=1.27.0"]
-    build-backend = "hatchling.build"
+    "apps/platform/pyproject.toml": load_workspace_template(
+        "apps/platform/pyproject.toml",
+        """
+        [build-system]
+        requires = ["hatchling>=1.27.0"]
+        build-backend = "hatchling.build"
 
-    [project]
-    name = "odp-platform"
-    version = "0.1.0"
-    description = "Core engine package for ODPlatform."
-    readme = "README.md"
-    requires-python = ">=3.11,<3.12"
-    license = { text = "MIT" }
-    authors = [{ name = "ODPlatform Team" }]
-    dependencies = []
+        [project]
+        name = "odp-platform"
+        version = "0.1.0"
+        description = "Core engine package for ODPlatform."
+        readme = "README.md"
+        requires-python = ">=3.11,<3.12"
+        license = { text = "MIT" }
+        authors = [{ name = "ODPlatform Team" }]
+        dependencies = []
 
-    [project.scripts]
-    odp-trans = "odp_platform.cli.trans:main"
-    odp-validate = "odp_platform.cli.validate:main"
-    odp-train = "odp_platform.cli.train:main"
-    odp-val = "odp_platform.cli.val:main"
-    odp-infer = "odp_platform.cli.infer:main"
+        [project.scripts]
+        odp-trans = "odp_platform.cli.trans:main"
+        odp-validate = "odp_platform.cli.validate:main"
+        odp-train = "odp_platform.cli.train:main"
+        odp-val = "odp_platform.cli.val:main"
+        odp-infer = "odp_platform.cli.infer:main"
 
-    [tool.hatch.build.targets.wheel]
-    packages = ["src/odp_platform"]
-    """,
+        [tool.hatch.build.targets.wheel]
+        packages = ["src/odp_platform"]
+        """,
+    ),
     "apps/platform/configs/train.example.yaml": """
     experiment:
       name: rsod-train-example
@@ -288,24 +310,27 @@ FILES = {
     def workspace_path(*parts: str) -> Path:
         return find_workspace_root(Path(__file__)).joinpath(*parts)
     """,
-    "apps/platform/src/odp_platform/common/logging_utils.py": """
-    \"\"\"Logging helpers for ODPlatform.\"\"\"
+    "apps/platform/src/odp_platform/common/logging_utils.py": load_workspace_template(
+        "apps/platform/src/odp_platform/common/logging_utils.py",
+        """
+        \"\"\"Logging helpers for ODPlatform.\"\"\"
 
-    from __future__ import annotations
+        from __future__ import annotations
 
-    import logging
+        import logging
 
 
-    def get_logger(name: str) -> logging.Logger:
-        logger = logging.getLogger(name)
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-        return logger
-    """,
+        def get_logger(name: str) -> logging.Logger:
+            logger = logging.getLogger(name)
+            if not logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+                handler.setFormatter(formatter)
+                logger.addHandler(handler)
+                logger.setLevel(logging.INFO)
+            return logger
+        """,
+    ),
     "apps/platform/src/odp_platform/common/system_utils.py": """
     \"\"\"System inspection helpers.\"\"\"
 
@@ -322,34 +347,40 @@ FILES = {
     def platform_summary() -> str:
         return platform.platform()
     """,
-    "apps/platform/src/odp_platform/common/string_utils.py": """
-    \"\"\"String helpers.\"\"\"
+    "apps/platform/src/odp_platform/common/string_utils.py": load_workspace_template(
+        "apps/platform/src/odp_platform/common/string_utils.py",
+        """
+        \"\"\"String helpers.\"\"\"
 
-    from __future__ import annotations
+        from __future__ import annotations
 
-    import re
-
-
-    def slugify(value: str) -> str:
-        normalized = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower())
-        return normalized.strip("-")
-    """,
-    "apps/platform/src/odp_platform/common/performance_utils.py": """
-    \"\"\"Performance measurement helpers.\"\"\"
-
-    from __future__ import annotations
-
-    from contextlib import contextmanager
-    from time import perf_counter
-    from typing import Iterator
+        import re
 
 
-    @contextmanager
-    def timer() -> Iterator[float]:
-        start = perf_counter()
-        yield start
-        _ = perf_counter() - start
-    """,
+        def slugify(value: str) -> str:
+            normalized = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower())
+            return normalized.strip("-")
+        """,
+    ),
+    "apps/platform/src/odp_platform/common/performance_utils.py": load_workspace_template(
+        "apps/platform/src/odp_platform/common/performance_utils.py",
+        """
+        \"\"\"Performance measurement helpers.\"\"\"
+
+        from __future__ import annotations
+
+        from contextlib import contextmanager
+        from time import perf_counter
+        from typing import Iterator
+
+
+        @contextmanager
+        def timer() -> Iterator[float]:
+            start = perf_counter()
+            yield start
+            _ = perf_counter() - start
+        """,
+    ),
     "apps/platform/src/odp_platform/config/__init__.py": """
     \"\"\"Configuration models and loaders.\"\"\"
     """,
@@ -602,6 +633,12 @@ FILES = {
     if __name__ == "__main__":
         raise SystemExit(main())
     """,
+    "apps/platform/src/odp_platform/cli/init_project.py": load_workspace_template(
+        "apps/platform/src/odp_platform/cli/init_project.py",
+        """
+        \"\"\"CLI command for preparing the platform workspace directories.\"\"\"
+        """,
+    ),
     "apps/platform/src/odp_platform/cli/train.py": """
     \"\"\"CLI placeholder for training orchestration.\"\"\"
 
@@ -788,8 +825,9 @@ def normalize(content: str) -> str:
 
 def ensure_dir(relative_path: str) -> bool:
     target = ROOT / relative_path
+    existed_before = target.exists()
     target.mkdir(parents=True, exist_ok=True)
-    return True
+    return not existed_before
 
 
 def ensure_file(relative_path: str, content: str) -> bool:
@@ -801,22 +839,83 @@ def ensure_file(relative_path: str, content: str) -> bool:
     return True
 
 
-def main() -> int:
+def bootstrap_logger():
+    if str(PLATFORM_SRC_DIR) not in sys.path:
+        sys.path.insert(0, str(PLATFORM_SRC_DIR))
+
+    try:
+        from odp_platform.common.logging_utils import ROOT_LOGGER_NAME, get_logger, setup_logging
+    except Exception as exc:
+        print(f"Logging bootstrap unavailable, falling back to stdout: {exc}")
+        return None
+
+    setup_logging(log_type="init_workspace", log_level="DEBUG")
+    return get_logger(f"{ROOT_LOGGER_NAME}.scripts.init_workspace")
+
+
+def emit_message(logger, message: str, level: str = "info") -> None:
+    if logger is None:
+        print(f"[{level.upper()}] {message}")
+        return
+    log_method = getattr(logger, level.lower(), logger.info)
+    log_method(message)
+
+
+def ensure_all_directories(logger) -> tuple[int, int]:
     created_dirs = 0
-    created_files = 0
+    skipped_dirs = 0
 
     for relative_dir in DIRS:
-        ensure_dir(relative_dir)
-        created_dirs += 1
+        if ensure_dir(relative_dir):
+            created_dirs += 1
+            emit_message(logger, f"Created directory: {relative_dir}")
+        else:
+            skipped_dirs += 1
+            emit_message(logger, f"Directory already exists, skipped: {relative_dir}", level="debug")
+
+    return created_dirs, skipped_dirs
+
+
+def ensure_all_files(logger) -> tuple[int, int]:
+    created_files = 0
+    skipped_files = 0
 
     for relative_file, content in FILES.items():
         if ensure_file(relative_file, content):
             created_files += 1
+            emit_message(logger, f"Created file: {relative_file}")
+        else:
+            skipped_files += 1
+            emit_message(logger, f"File already exists, skipped: {relative_file}", level="debug")
 
-    print(f"Workspace root: {ROOT}")
-    print(f"Ensured directories: {created_dirs}")
-    print(f"Created files: {created_files}")
-    print("Initialization complete.")
+    return created_files, skipped_files
+
+
+def main() -> int:
+    logger = bootstrap_logger()
+    emit_message(logger, f"Workspace initialization started: {ROOT}")
+    try:
+        from odp_platform.common.performance_utils import time_it
+    except Exception as exc:
+        emit_message(logger, f"Performance utilities unavailable, continuing without timing: {exc}", level="warning")
+        created_dirs, skipped_dirs = ensure_all_directories(logger)
+        created_files, skipped_files = ensure_all_files(logger)
+    else:
+        created_dirs, skipped_dirs = time_it(
+            name="init_workspace.ensure_directories",
+            logger_instance=logger,
+        )(ensure_all_directories)(logger)
+        created_files, skipped_files = time_it(
+            name="init_workspace.ensure_files",
+            logger_instance=logger,
+        )(ensure_all_files)(logger)
+
+    emit_message(logger, f"Workspace root: {ROOT}")
+    emit_message(logger, f"Directories created: {created_dirs}")
+    emit_message(logger, f"Directories skipped: {skipped_dirs}", level="debug")
+    emit_message(logger, f"Files created: {created_files}")
+    emit_message(logger, f"Files skipped: {skipped_files}", level="debug")
+    emit_message(logger, "Initialization complete.")
     return 0
 
 
