@@ -18,17 +18,20 @@ def load_workspace_template(relative_path: str, fallback: str) -> str:
 DIRS = [
     "apps/platform/src/odp_platform/common",
     "apps/platform/src/odp_platform/config",
-    "apps/platform/src/odp_platform/data_pipline/core",
+    "apps/platform/src/odp_platform/data_pipeline/core",
+    "apps/platform/src/odp_platform/data_pipeline/split",
     "apps/platform/src/odp_platform/data_validation/core",
     "apps/platform/src/odp_platform/training",
     "apps/platform/src/odp_platform/evaluation",
     "apps/platform/src/odp_platform/inference",
     "apps/platform/src/odp_platform/cli",
+    "apps/platform/tests/data_pipeline/split",
     "apps/platform/tests/unit/common",
     "apps/platform/tests/unit/config",
     "apps/platform/tests/unit/data_validation",
     "apps/platform/tests/integration",
     "apps/platform/configs",
+    "apps/platform/configs/datasets",
     "apps/platform/logging",
     "apps/web-backend",
     "apps/web-frontend",
@@ -234,6 +237,7 @@ FILES = {
 
         [project.scripts]
         odp-trans = "odp_platform.cli.trans:main"
+        odp-transform = "odp_platform.cli.transform_data:main"
         odp-validate = "odp_platform.cli.validate:main"
         odp-train = "odp_platform.cli.train:main"
         odp-val = "odp_platform.cli.val:main"
@@ -477,30 +481,84 @@ FILES = {
     def generate_template(template_name: str) -> dict[str, Any]:
         return {"template": template_name, "status": "not-implemented"}
     """,
-    "apps/platform/src/odp_platform/data_pipline/__init__.py": """
-    \"\"\"Dataset conversion layer.\"\"\"
-    """,
-    "apps/platform/src/odp_platform/data_pipline/service.py": """
-    \"\"\"Data conversion orchestration placeholders.\"\"\"
-
-
-    class DataPipelineService:
-        def status(self) -> str:
-            return "not-implemented"
-    """,
-    "apps/platform/src/odp_platform/data_pipline/core/__init__.py": """
-    \"\"\"Format-specific data conversion helpers.\"\"\"
-    """,
-    "apps/platform/src/odp_platform/data_pipline/core/pascal_voc.py": """
-    \"\"\"Pascal VOC conversion placeholders for the RSOD dataset.\"\"\"
-
-    SUPPORTED_SOURCE_FORMAT = "pascal_voc"
-    """,
-    "apps/platform/src/odp_platform/data_pipline/core/coco.py": """
-    \"\"\"COCO conversion placeholders.\"\"\"
-
-    SUPPORTED_SOURCE_FORMAT = "coco"
-    """,
+    "apps/platform/src/odp_platform/data_pipeline/__init__.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/__init__.py",
+        """
+        \"\"\"Public API for the ODPlatform data preparation pipeline.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/registry.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/registry.py",
+        """
+        \"\"\"Converter registry and shared option objects for the data pipeline.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/service.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/service.py",
+        """
+        \"\"\"Dispatch helpers that call registered dataset converters.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/orchestrator.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/orchestrator.py",
+        """
+        \"\"\"End-to-end orchestration for dataset preparation.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/core/__init__.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/core/__init__.py",
+        """
+        \"\"\"Converter implementations for supported dataset formats.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/core/pascal_voc.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/core/pascal_voc.py",
+        """
+        \"\"\"Pascal VOC conversion placeholders for the RSOD dataset.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/core/coco.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/core/coco.py",
+        """
+        \"\"\"COCO conversion placeholders.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/core/yolo.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/core/yolo.py",
+        """
+        \"\"\"YOLO conversion placeholders.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/split/__init__.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/split/__init__.py",
+        """
+        \"\"\"Split helpers for prepared datasets.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/split/manifest.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/split/manifest.py",
+        """
+        \"\"\"Shared manifest objects exchanged across the data pipeline.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/split/splitter.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/split/splitter.py",
+        """
+        \"\"\"Dataset splitting helpers.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/split/materializer.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/split/materializer.py",
+        """
+        \"\"\"Copy split datasets into their final directory layout.\"\"\"
+        """,
+    ),
+    "apps/platform/src/odp_platform/data_pipeline/split/yaml_writer.py": load_workspace_template(
+        "apps/platform/src/odp_platform/data_pipeline/split/yaml_writer.py",
+        """
+        \"\"\"Write dataset yaml files.\"\"\"
+        """,
+    ),
     "apps/platform/src/odp_platform/data_validation/__init__.py": """
     \"\"\"Dataset validation layer.\"\"\"
     """,
@@ -639,6 +697,12 @@ FILES = {
         \"\"\"CLI command for preparing the platform workspace directories.\"\"\"
         """,
     ),
+    "apps/platform/src/odp_platform/cli/transform_data.py": load_workspace_template(
+        "apps/platform/src/odp_platform/cli/transform_data.py",
+        """
+        \"\"\"CLI entrypoint for dataset preparation.\"\"\"
+        """,
+    ),
     "apps/platform/src/odp_platform/cli/train.py": """
     \"\"\"CLI placeholder for training orchestration.\"\"\"
 
@@ -697,10 +761,51 @@ FILES = {
 
 
     def test_cli_modules_are_importable() -> None:
-        for module_name in ("trans", "validate", "train", "val", "infer"):
+        for module_name in ("trans", "transform_data", "validate", "train", "val", "infer"):
             module = importlib.import_module(f"odp_platform.cli.{module_name}")
             assert callable(module.main)
     """,
+    "apps/platform/tests/data_pipeline/__init__.py": "",
+    "apps/platform/tests/data_pipeline/test_registry.py": load_workspace_template(
+        "apps/platform/tests/data_pipeline/test_registry.py",
+        """
+        from odp_platform.data_pipeline import ConvertOptions, list_capabilities
+
+
+        def test_registry_placeholder() -> None:
+            options = ConvertOptions(dataset_name="demo", source_format="pascal_voc")
+            assert options.dataset_name == "demo"
+            assert "pascal_voc" in list_capabilities()
+        """,
+    ),
+    "apps/platform/tests/data_pipeline/split/__init__.py": "",
+    "apps/platform/tests/data_pipeline/split/test_splitter.py": load_workspace_template(
+        "apps/platform/tests/data_pipeline/split/test_splitter.py",
+        """
+        from pathlib import Path
+
+        from odp_platform.data_pipeline.split.manifest import PreparedSample
+        from odp_platform.data_pipeline.split.splitter import split_pairs
+
+
+        def test_splitter_placeholder() -> None:
+            sample = PreparedSample(
+                stem="demo",
+                image_path=Path("demo.jpg"),
+                label_path=Path("demo.txt"),
+                class_names=("demo",),
+            )
+            split_map = split_pairs([sample], train_rate=1.0 - 1e-9, val_rate=0.0, test_rate=0.0, random_state=42)
+            assert len(split_map["train"]) == 1
+        """,
+    ),
+    "apps/platform/tests/test_e2e_smoke.py": load_workspace_template(
+        "apps/platform/tests/test_e2e_smoke.py",
+        """
+        def test_smoke_placeholder() -> None:
+            assert True
+        """,
+    ),
     "apps/platform/tests/integration/test_train_pipeline.py": """
     from odp_platform.training.service import TrainingService
 
@@ -762,8 +867,8 @@ FILES = {
     # ADR-003 Naming
 
     - Status: accepted
-    - Decision: keep the package name `odp_platform` and preserve the teacher-provided directory names
-    - Note: `data_pipline` remains unchanged during bootstrap for compatibility with the current specification
+    - Decision: keep the package name `odp_platform` and standardize the data preparation package as `data_pipeline`
+    - Note: the earlier `data_pipline` spelling was a bootstrap-stage typo and is no longer used in code generation or runtime imports
     """,
     "docs/srs/ODPlatform_SRS_V1.0.md": """
     # ODPlatform SRS V1.0
