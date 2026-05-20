@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 from xml.etree import ElementTree
@@ -10,30 +9,12 @@ from xml.etree import ElementTree
 from odp_platform.common.constants import FORMAT_PASCAL_VOC, TASK_DETECT
 from odp_platform.common.paths import RAW_DATASETS_DIR, RAW_DATA_DIR, YOLO_DATASETS_DIR
 from odp_platform.data_pipeline.registry import ConvertOptions
+from odp_platform.data_pipeline.split.manifest import ConversionManifest, PreparedSample
 
 
 SUPPORTED_SOURCE_FORMAT: Final[str] = FORMAT_PASCAL_VOC
 SUPPORTED_TASKS: Final[tuple[str, ...]] = (TASK_DETECT,)
 _IMAGE_SUFFIXES: Final[tuple[str, ...]] = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
-
-
-@dataclass(slots=True)
-class ConvertedSample:
-    """One converted image/label pair."""
-
-    image_path: Path
-    label_path: Path
-    class_names: tuple[str, ...]
-
-
-@dataclass(slots=True)
-class ConversionResult:
-    """Output summary from a VOC conversion run."""
-
-    dataset_name: str
-    source_format: str
-    classes: list[str]
-    samples: list[ConvertedSample]
 
 
 def _resolve_source_root(options: ConvertOptions, source_root: Path | None) -> Path:
@@ -146,7 +127,7 @@ def convert(
     options: ConvertOptions,
     source_root: Path | None = None,
     output_labels_dir: Path | None = None,
-) -> ConversionResult:
+) -> ConversionManifest:
     """Convert one Pascal VOC dataset into flat YOLO label files."""
 
     source_root = _resolve_source_root(options, source_root)
@@ -163,7 +144,7 @@ def convert(
     output_labels_dir = _resolve_output_labels_dir(options, output_labels_dir)
     output_labels_dir.mkdir(parents=True, exist_ok=True)
 
-    samples: list[ConvertedSample] = []
+    samples: list[PreparedSample] = []
     for annotation_path in annotation_paths:
         stem = annotation_path.stem
         image_path = _find_image_path(images_dir, stem)
@@ -191,24 +172,26 @@ def convert(
         label_path = output_labels_dir / f"{stem}.txt"
         label_path.write_text("\n".join(lines), encoding="utf-8")
         samples.append(
-            ConvertedSample(
+            PreparedSample(
+                stem=stem,
                 image_path=image_path,
                 label_path=label_path,
                 class_names=tuple(sample_classes),
             )
         )
 
-    return ConversionResult(
+    return ConversionManifest(
         dataset_name=options.dataset_name,
         source_format=SUPPORTED_SOURCE_FORMAT,
+        task=options.task,
         classes=classes,
         samples=samples,
+        source_root=source_root,
+        labels_root=output_labels_dir,
     )
 
 
 __all__ = [
-    "ConversionResult",
-    "ConvertedSample",
     "SUPPORTED_SOURCE_FORMAT",
     "SUPPORTED_TASKS",
     "convert",
