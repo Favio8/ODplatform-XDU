@@ -4,6 +4,7 @@ from pathlib import Path
 import odp_platform
 from odp_platform.common import constants
 from odp_platform.common import paths
+from odp_platform.data_pipeline import ConvertOptions
 
 
 def test_package_exposes_version() -> None:
@@ -55,3 +56,14 @@ def test_data_pipeline_constants() -> None:
     assert constants.SUPPORTED_TASKS == ("detect", "segment")
     assert constants.SUPPORTED_SPLITS == ("train", "val", "test")
     assert constants.SCHEMA_VERSION == 1
+
+
+def test_convert_options_can_be_initialized_without_registry() -> None:
+    options = ConvertOptions(
+        dataset_name="rsod",
+        source_format=constants.FORMAT_PASCAL_VOC,
+    )
+    assert options.dataset_name == "rsod"
+    assert options.source_format == constants.FORMAT_PASCAL_VOC
+    assert options.task == constants.TASK_DETECT
+    assert options.classes is None
