@@ -2,6 +2,7 @@ import importlib
 from pathlib import Path
 
 import odp_platform
+from odp_platform.common import constants
 from odp_platform.common import paths
 
 
@@ -27,6 +28,9 @@ def test_common_workspace_path_constants() -> None:
     assert paths.LOGGING_DIR == paths.app_path("logging")
     assert paths.META_DIR == paths.workspace_path(".odp-meta")
     assert paths.META_LOGGING_DIR == paths.META_DIR / "logs"
+    assert paths.RAW_DATASETS_DIR == paths.data_path("raw")
+    assert paths.YOLO_DATASETS_DIR == paths.data_path("yolo")
+    assert paths.DATASET_CONFIGS_DIR == paths.app_path("configs", "datasets")
     assert paths.MODELS_DIR == paths.workspace_path("models")
     assert paths.CONFIGS_DIR == paths.PLATFORM_CONFIG_DIR
     assert paths.PLATFORM_CONFIG_DIR == paths.app_path("configs")
@@ -40,4 +44,14 @@ def test_common_workspace_path_constants() -> None:
     assert paths.is_within_workspace(Path(paths.ROOT_DIR) / "apps")
     assert paths.RAW_DATA_DIR in paths.get_dirs_to_initialize()
     assert paths.META_LOGGING_DIR in paths.get_dirs_to_initialize()
+    assert paths.DATASET_CONFIGS_DIR in paths.get_dirs_to_initialize()
     assert paths.RUNS_DIR in paths.get_dirs_to_reset()
+
+
+def test_data_pipeline_constants() -> None:
+    assert constants.FORMAT_PASCAL_VOC == "pascal_voc"
+    assert constants.FORMAT_COCO == "coco"
+    assert constants.FORMAT_YOLO == "yolo"
+    assert constants.SUPPORTED_TASKS == ("detect", "segment")
+    assert constants.SUPPORTED_SPLITS == ("train", "val", "test")
+    assert constants.SCHEMA_VERSION == 1

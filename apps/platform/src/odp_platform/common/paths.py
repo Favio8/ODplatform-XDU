@@ -82,6 +82,11 @@ SCRIPTS_DIR: Final[Path] = ROOT_DIR / "scripts"
 META_DIR: Final[Path] = ROOT_DIR / ".odp-meta"
 META_LOGGING_DIR: Final[Path] = META_DIR / "logs"
 
+# D3 data pipeline 使用的通用数据集目录
+RAW_DATASETS_DIR: Final[Path] = DATA_DIR / "raw"
+YOLO_DATASETS_DIR: Final[Path] = DATA_DIR / "yolo"
+DATASET_CONFIGS_DIR: Final[Path] = PLATFORM_CONFIG_DIR / "datasets"
+
 
 def workspace_path(*parts: str | Path) -> Path:
     """Build a path relative to the workspace root."""
@@ -143,6 +148,7 @@ def get_dirs_to_initialize() -> list[Path]:
         PLATFORM_LOGGING_DIR,
         UNIT_TEST_DIR,
         META_LOGGING_DIR,
+        DATASET_CONFIGS_DIR,
     ]
 
 
@@ -226,6 +232,9 @@ __all__ = [
     "SCRIPTS_DIR",
     "META_DIR",
     "META_LOGGING_DIR",
+    "RAW_DATASETS_DIR",
+    "YOLO_DATASETS_DIR",
+    "DATASET_CONFIGS_DIR",
     "find_workspace_root",
     "get_dirs_to_initialize",
     "get_dirs_to_reset",
