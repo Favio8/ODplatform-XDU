@@ -27,6 +27,7 @@ DEFAULT_TRAIN_RATE: Final[float] = 0.8
 DEFAULT_VAL_RATE: Final[float] = 0.1
 DEFAULT_TEST_RATE: Final[float] = 0.1
 DEFAULT_RANDOM_STATE: Final[int] = 42
+DEFAULT_MIN_COVERAGE: Final[float] = 0.5
 RATE_EPSILON: Final[float] = 1e-8
 
 SUPPORTED_TASKS: Final[tuple[str, ...]] = (
@@ -50,6 +51,7 @@ SUPPORTED_SPLITS: Final[tuple[str, ...]] = (
 __all__ = [
     "ANNOTATIONS_DIRNAME",
     "DEFAULT_RANDOM_STATE",
+    "DEFAULT_MIN_COVERAGE",
     "DEFAULT_TEST_RATE",
     "DEFAULT_TRAIN_RATE",
     "DEFAULT_VAL_RATE",
