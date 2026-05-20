@@ -33,6 +33,9 @@ dependencies = [
   "colorlog>=6.7.0",
   "pyyaml>=6.0",
   "pydantic>=2.4.2",
+  "scikit-learn>=1.4.0",
+  "ultralytics>=8.2.0",
+  "pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
@@ -46,12 +49,13 @@ dev = [
 
 [project.scripts]
 odp-trans = "odp_platform.cli.trans:main"
+odp-transform = "odp_platform.cli.transform_data:main"
 odp-validate = "odp_platform.cli.validate:main"
 odp-init-project = "odp_platform.cli.init_project:main"
 odp-train = "odp_platform.cli.train:main"
 odp-val = "odp_platform.cli.val:main"
 odp-infer = "odp_platform.cli.infer:main"
-odp-reset= "odp_platform.cli.reset_project:main"
+odp-reset = "odp_platform.cli.reset_project:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/odp_platform"]

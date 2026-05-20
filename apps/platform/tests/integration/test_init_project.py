@@ -12,7 +12,16 @@ def test_package_exposes_version() -> None:
 
 
 def test_cli_modules_are_importable() -> None:
-    for module_name in ("trans", "validate", "init_project", "reset_project", "train", "val", "infer"):
+    for module_name in (
+        "trans",
+        "validate",
+        "init_project",
+        "reset_project",
+        "transform_data",
+        "train",
+        "val",
+        "infer",
+    ):
         module = importlib.import_module(f"odp_platform.cli.{module_name}")
         assert callable(module.main)
 
