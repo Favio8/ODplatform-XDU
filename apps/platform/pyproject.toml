@@ -51,6 +51,7 @@ odp-init-project = "odp_platform.cli.init_project:main"
 odp-train = "odp_platform.cli.train:main"
 odp-val = "odp_platform.cli.val:main"
 odp-infer = "odp_platform.cli.infer:main"
+odp-reset= "odp_platform.cli.reset_project:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/odp_platform"]
