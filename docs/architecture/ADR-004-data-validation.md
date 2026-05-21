@@ -1,0 +1,29 @@
+# ADR-004 Data Validation
+
+- Status: accepted
+- Decision: add a dedicated `odp_platform.data_validation` subsystem that validates prepared YOLO datasets before training and emits a structured report plus CLI exit code
+- Context:
+  - D3 already produces trainable dataset YAML files, but it does not judge whether those datasets are safe to train on
+  - validation must detect issues without mutating dataset contents
+- Key decisions:
+  - use a check registry with `@check(...)` registration and `pkgutil.iter_modules` autodiscovery
+  - represent severities as string constants with ranking logic instead of `Enum`
+  - build one immutable `DatasetSnapshot` and share it across checks
+  - keep `ValidationReport` as pure data and `render_to_logger` as a separate presentation layer
+  - keep end-to-end orchestration as a function `validate_dataset(...)`, not a validator class
+  - allow `pair_existence` to grade by missing-label ratio while the other checks stay strict
+  - catch unexpected plugin/check exceptions only in the check dispatcher so one broken check cannot block the rest
+- Rejected alternatives:
+  - letting every check rescan the filesystem independently
+  - introducing a stateful `DatasetValidator` class for a single public action
+  - adding a `ReportSection` intermediate abstraction before a second renderer exists
+  - mixing validation with auto-fix behavior inside the same subsystem
+- Consequences:
+  - `odp-validate` becomes the formal quality gate before D5 training
+  - reports live under `runs/data_validation/<run_id>/report.json`
+  - adding a new check only requires a new file under `data_validation/checks/`
+  - future renderers such as HTML or Markdown can be added without changing report data contracts
+- Known boundaries:
+  - no sampling mode yet; checks scan the full prepared dataset
+  - severity thresholds are code constants, not runtime-configurable
+  - `render_to_logger` still uses direct branching and can be refactored later if the check set grows significantly

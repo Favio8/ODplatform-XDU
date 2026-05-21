@@ -1,9 +1,6 @@
-"""CLI placeholder for dataset validation."""
+"""Compatibility shim for the dataset validation CLI."""
 
-
-def main() -> int:
-    print("TODO: implement dataset validation command.")
-    return 0
+from odp_platform.cli.validate_data import main
 
 
 if __name__ == "__main__":

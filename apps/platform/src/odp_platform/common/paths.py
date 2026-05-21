@@ -51,10 +51,17 @@ UNIT_TEST_DIR: Final[Path] = PLATFORM_APP_DIR / "tests"
 # 顶层 data 目录 - 工作区共享的数据资源
 DATA_DIR: Final[Path] = ROOT_DIR / "data"
 
-# RSOD 数据集目录
-RSOD_DATA_DIR: Final[Path] = DATA_DIR / "RSOD"
-RAW_DATA_DIR: Final[Path] = RSOD_DATA_DIR / "raw"
-YOLO_DATA_DIR: Final[Path] = RSOD_DATA_DIR / "yolo"
+# D3 data pipeline 使用的通用数据集目录
+RAW_DATASETS_DIR: Final[Path] = DATA_DIR / "raw"
+YOLO_DATASETS_DIR: Final[Path] = DATA_DIR / "yolo"
+DATASET_CONFIGS_DIR: Final[Path] = PLATFORM_CONFIG_DIR / "datasets"
+
+# 兼容别名: 原始数据根与中间 YOLO 数据根
+RAW_DATA_DIR: Final[Path] = RAW_DATASETS_DIR
+YOLO_DATA_DIR: Final[Path] = YOLO_DATASETS_DIR
+
+# 兼容别名: 历史上曾把 RSOD 单独放到 data/RSOD 下
+RSOD_DATA_DIR: Final[Path] = RAW_DATASETS_DIR / "rsod"
 
 # 划分后的训练/验证/测试数据目录
 TRAIN_DIR: Final[Path] = DATA_DIR / "train"
@@ -68,6 +75,7 @@ CHECKPOINTS_DIR: Final[Path] = MODELS_DIR / "checkpoints"
 
 # 顶层 runs 目录 - 实验运行输出
 RUNS_DIR: Final[Path] = ROOT_DIR / "runs"
+VALIDATION_RUNS_DIR: Final[Path] = RUNS_DIR / "data_validation"
 
 # 顶层 docs 目录 - 项目文档
 DOCS_DIR: Final[Path] = ROOT_DIR / "docs"
@@ -81,12 +89,6 @@ SCRIPTS_DIR: Final[Path] = ROOT_DIR / "scripts"
 # .odp-meta/ - 工具自身的元数据与日志
 META_DIR: Final[Path] = ROOT_DIR / ".odp-meta"
 META_LOGGING_DIR: Final[Path] = META_DIR / "logs"
-
-# D3 data pipeline 使用的通用数据集目录
-RAW_DATASETS_DIR: Final[Path] = DATA_DIR / "raw"
-YOLO_DATASETS_DIR: Final[Path] = DATA_DIR / "yolo"
-DATASET_CONFIGS_DIR: Final[Path] = PLATFORM_CONFIG_DIR / "datasets"
-
 
 def workspace_path(*parts: str | Path) -> Path:
     """Build a path relative to the workspace root."""
@@ -118,6 +120,33 @@ def run_path(*parts: str | Path) -> Path:
     return RUNS_DIR.joinpath(*(str(part) for part in parts))
 
 
+def validation_run_dir(run_id: str) -> Path:
+    """Build a path for one data-validation run."""
+
+    normalized_run_id = run_id.strip()
+    if not normalized_run_id:
+        raise ValueError("run_id must not be empty")
+    return VALIDATION_RUNS_DIR / normalized_run_id
+
+
+def raw_dataset_root(dataset_name: str) -> Path:
+    """Return the canonical raw dataset root for one dataset."""
+
+    normalized_name = dataset_name.strip()
+    if not normalized_name:
+        raise ValueError("dataset_name must not be empty")
+    return RAW_DATASETS_DIR / normalized_name
+
+
+def dataset_yaml_path(dataset_name: str) -> Path:
+    """Return the canonical dataset-yaml path for one dataset."""
+
+    normalized_name = dataset_name.strip()
+    if not normalized_name:
+        raise ValueError("dataset_name must not be empty")
+    return DATASET_CONFIGS_DIR / f"{normalized_name}.yaml"
+
+
 def is_within_workspace(path: Path | str) -> bool:
     """Return whether a path resolves inside the current workspace."""
 
@@ -134,13 +163,13 @@ def get_dirs_to_initialize() -> list[Path]:
 
     return [
         DATA_DIR,
-        RSOD_DATA_DIR,
-        RAW_DATA_DIR,
-        YOLO_DATA_DIR,
+        RAW_DATASETS_DIR,
+        YOLO_DATASETS_DIR,
         MODELS_DIR,
         PRETRAINED_MODELS_DIR,
         CHECKPOINTS_DIR,
         RUNS_DIR,
+        VALIDATION_RUNS_DIR,
         DOCS_DIR,
         TESTS_DIR,
         SCRIPTS_DIR,
@@ -227,6 +256,7 @@ __all__ = [
     "PRETRAINED_MODELS_DIR",
     "CHECKPOINTS_DIR",
     "RUNS_DIR",
+    "VALIDATION_RUNS_DIR",
     "DOCS_DIR",
     "TESTS_DIR",
     "SCRIPTS_DIR",
@@ -235,6 +265,8 @@ __all__ = [
     "RAW_DATASETS_DIR",
     "YOLO_DATASETS_DIR",
     "DATASET_CONFIGS_DIR",
+    "raw_dataset_root",
+    "dataset_yaml_path",
     "find_workspace_root",
     "get_dirs_to_initialize",
     "get_dirs_to_reset",
@@ -243,5 +275,6 @@ __all__ = [
     "data_path",
     "model_path",
     "run_path",
+    "validation_run_dir",
     "is_within_workspace",
 ]

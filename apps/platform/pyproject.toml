@@ -50,7 +50,7 @@ dev = [
 [project.scripts]
 odp-trans = "odp_platform.cli.trans:main"
 odp-transform = "odp_platform.cli.transform_data:main"
-odp-validate = "odp_platform.cli.validate:main"
+odp-validate = "odp_platform.cli.validate_data:main"
 odp-init-project = "odp_platform.cli.init_project:main"
 odp-train = "odp_platform.cli.train:main"
 odp-val = "odp_platform.cli.val:main"

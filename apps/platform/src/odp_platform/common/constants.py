@@ -12,6 +12,16 @@ FORMAT_PASCAL_VOC: Final[str] = "pascal_voc"
 FORMAT_COCO: Final[str] = "coco"
 FORMAT_YOLO: Final[str] = "yolo"
 
+IMAGE_EXTENSIONS: Final[tuple[str, ...]] = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+)
+
 SPLIT_TRAIN: Final[str] = "train"
 SPLIT_VAL: Final[str] = "val"
 SPLIT_TEST: Final[str] = "test"
@@ -28,6 +38,9 @@ DEFAULT_VAL_RATE: Final[float] = 0.1
 DEFAULT_TEST_RATE: Final[float] = 0.1
 DEFAULT_RANDOM_STATE: Final[int] = 42
 DEFAULT_MIN_COVERAGE: Final[float] = 0.5
+COVERAGE_SOFT_THRESHOLD: Final[float] = 0.9
+PAIR_MISSING_ERROR_RATIO: Final[float] = 0.5
+PAIR_MISSING_WARN_RATIO: Final[float] = 0.05
 RATE_EPSILON: Final[float] = 1e-8
 
 SUPPORTED_TASKS: Final[tuple[str, ...]] = (
@@ -52,15 +65,19 @@ __all__ = [
     "ANNOTATIONS_DIRNAME",
     "DEFAULT_RANDOM_STATE",
     "DEFAULT_MIN_COVERAGE",
+    "COVERAGE_SOFT_THRESHOLD",
     "DEFAULT_TEST_RATE",
     "DEFAULT_TRAIN_RATE",
     "DEFAULT_VAL_RATE",
     "FORMAT_COCO",
     "FORMAT_PASCAL_VOC",
     "FORMAT_YOLO",
+    "IMAGE_EXTENSIONS",
     "IMAGES_DIRNAME",
     "LABELS_DIRNAME",
     "ODP_META_KEY",
+    "PAIR_MISSING_ERROR_RATIO",
+    "PAIR_MISSING_WARN_RATIO",
     "RATE_EPSILON",
     "SCHEMA_VERSION",
     "SPLIT_TEST",
