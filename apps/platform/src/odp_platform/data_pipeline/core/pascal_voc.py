@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Final
 from xml.etree import ElementTree
 
-from odp_platform.common.constants import FORMAT_PASCAL_VOC, TASK_DETECT
-from odp_platform.common.paths import RAW_DATASETS_DIR, RAW_DATA_DIR, YOLO_DATASETS_DIR
+from odp_platform.common.constants import FORMAT_PASCAL_VOC, IMAGE_EXTENSIONS, TASK_DETECT
+from odp_platform.common.paths import YOLO_DATASETS_DIR, raw_dataset_root
 from odp_platform.data_pipeline.registry import ConvertOptions
 from odp_platform.data_pipeline.split.manifest import ConversionManifest, PreparedSample
 
 
 SUPPORTED_SOURCE_FORMAT: Final[str] = FORMAT_PASCAL_VOC
 SUPPORTED_TASKS: Final[tuple[str, ...]] = (TASK_DETECT,)
-_IMAGE_SUFFIXES: Final[tuple[str, ...]] = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
+logger = logging.getLogger(__name__)
 
 
 def _resolve_source_root(options: ConvertOptions, source_root: Path | None) -> Path:
@@ -22,15 +23,7 @@ def _resolve_source_root(options: ConvertOptions, source_root: Path | None) -> P
         return Path(source_root)
     if options.source_root is not None:
         return options.source_root
-
-    generic_root = RAW_DATASETS_DIR / options.dataset_name
-    if generic_root.exists():
-        return generic_root
-
-    if options.dataset_name.lower() == "rsod" and RAW_DATA_DIR.exists():
-        return RAW_DATA_DIR
-
-    return generic_root
+    return raw_dataset_root(options.dataset_name)
 
 
 def _resolve_output_labels_dir(options: ConvertOptions, output_labels_dir: Path | None) -> Path:
@@ -55,11 +48,21 @@ def _detect_annotations_dir(source_root: Path) -> Path:
     return annotations_dir
 
 
-def _find_image_path(images_dir: Path, stem: str) -> Path:
-    for suffix in _IMAGE_SUFFIXES:
-        candidate = images_dir / f"{stem}{suffix}"
-        if candidate.exists():
-            return candidate
+def _build_image_index(images_dir: Path) -> dict[str, Path]:
+    image_exts_lower = {suffix.lower() for suffix in IMAGE_EXTENSIONS}
+    image_index: dict[str, Path] = {}
+    for candidate in sorted(images_dir.iterdir()):
+        if not candidate.is_file():
+            continue
+        if candidate.suffix.lower() not in image_exts_lower:
+            continue
+        image_index.setdefault(candidate.stem, candidate)
+    return image_index
+
+
+def _find_image_path(image_index: dict[str, Path], images_dir: Path, stem: str) -> Path:
+    if stem in image_index:
+        return image_index[stem]
     raise FileNotFoundError(f"No image file found for {stem!r} under {images_dir}")
 
 
@@ -70,8 +73,13 @@ def _load_image_size(image_path: Path) -> tuple[int, int]:
         return image.size
 
 
-def _parse_objects(annotation_path: Path) -> list[tuple[str, tuple[float, float, float, float]]]:
-    root = ElementTree.parse(annotation_path).getroot()
+def _parse_objects(annotation_path: Path) -> list[tuple[str, tuple[float, float, float, float]]] | None:
+    try:
+        root = ElementTree.parse(annotation_path).getroot()
+    except ElementTree.ParseError as exc:
+        logger.warning("%s XML is malformed: %s; skipped", annotation_path.name, exc)
+        return None
+
     objects: list[tuple[str, tuple[float, float, float, float]]] = []
 
     for obj in root.findall("object"):
@@ -83,10 +91,14 @@ def _parse_objects(annotation_path: Path) -> list[tuple[str, tuple[float, float,
         if bbox is None:
             continue
 
-        xmin = float(bbox.findtext("xmin", "0"))
-        ymin = float(bbox.findtext("ymin", "0"))
-        xmax = float(bbox.findtext("xmax", "0"))
-        ymax = float(bbox.findtext("ymax", "0"))
+        try:
+            xmin = float(bbox.findtext("xmin", "0"))
+            ymin = float(bbox.findtext("ymin", "0"))
+            xmax = float(bbox.findtext("xmax", "0"))
+            ymax = float(bbox.findtext("ymax", "0"))
+        except (TypeError, ValueError):
+            logger.debug("%s has one object with invalid bbox values; skipped object", annotation_path.name)
+            continue
         objects.append((class_name, (xmin, ymin, xmax, ymax)))
 
     return objects
@@ -98,9 +110,33 @@ def _collect_classes(annotation_paths: list[Path], user_classes: list[str] | Non
 
     discovered: set[str] = set()
     for annotation_path in annotation_paths:
-        for class_name, _ in _parse_objects(annotation_path):
+        objects = _parse_objects(annotation_path)
+        if objects is None:
+            continue
+        for class_name, _ in objects:
             discovered.add(class_name)
     return sorted(discovered)
+
+
+def _clamp_unit_interval(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def _clip_bbox_to_image(
+    bbox: tuple[float, float, float, float],
+    *,
+    image_width: int,
+    image_height: int,
+) -> tuple[float, float, float, float] | None:
+    xmin, ymin, xmax, ymax = bbox
+    clipped_xmin = min(max(xmin, 0.0), float(image_width))
+    clipped_ymin = min(max(ymin, 0.0), float(image_height))
+    clipped_xmax = min(max(xmax, 0.0), float(image_width))
+    clipped_ymax = min(max(ymax, 0.0), float(image_height))
+
+    if clipped_xmax <= clipped_xmin or clipped_ymax <= clipped_ymin:
+        return None
+    return clipped_xmin, clipped_ymin, clipped_xmax, clipped_ymax
 
 
 def _to_yolo_bbox(
@@ -108,17 +144,25 @@ def _to_yolo_bbox(
     *,
     image_width: int,
     image_height: int,
-) -> tuple[float, float, float, float]:
-    xmin, ymin, xmax, ymax = bbox
+) -> tuple[float, float, float, float] | None:
+    clipped_bbox = _clip_bbox_to_image(
+        bbox,
+        image_width=image_width,
+        image_height=image_height,
+    )
+    if clipped_bbox is None:
+        return None
+
+    xmin, ymin, xmax, ymax = clipped_bbox
     width = xmax - xmin
     height = ymax - ymin
     x_center = xmin + width / 2.0
     y_center = ymin + height / 2.0
     return (
-        x_center / image_width,
-        y_center / image_height,
-        width / image_width,
-        height / image_height,
+        _clamp_unit_interval(x_center / image_width),
+        _clamp_unit_interval(y_center / image_height),
+        _clamp_unit_interval(width / image_width),
+        _clamp_unit_interval(height / image_height),
     )
 
 
@@ -140,6 +184,7 @@ def convert(
 
     classes = _collect_classes(annotation_paths, options.classes)
     class_to_id = {class_name: index for index, class_name in enumerate(classes)}
+    image_index = _build_image_index(images_dir)
 
     output_labels_dir = _resolve_output_labels_dir(options, output_labels_dir)
     output_labels_dir.mkdir(parents=True, exist_ok=True)
@@ -147,22 +192,37 @@ def convert(
     samples: list[PreparedSample] = []
     for annotation_path in annotation_paths:
         stem = annotation_path.stem
-        image_path = _find_image_path(images_dir, stem)
-        image_width, image_height = _load_image_size(image_path)
+        objects = _parse_objects(annotation_path)
+        if objects is None:
+            continue
+
+        try:
+            image_path = _find_image_path(image_index, images_dir, stem)
+            image_width, image_height = _load_image_size(image_path)
+        except (FileNotFoundError, OSError) as exc:
+            logger.warning("%s skipped because its image is unavailable: %s", annotation_path.name, exc)
+            continue
+
+        if image_width <= 0 or image_height <= 0:
+            logger.warning("%s skipped because image size is invalid: %sx%s", annotation_path.name, image_width, image_height)
+            continue
 
         lines: list[str] = []
         sample_classes: list[str] = []
-        for class_name, bbox in _parse_objects(annotation_path):
+        for class_name, bbox in objects:
             if class_name not in class_to_id:
-                raise ValueError(
-                    f"Class {class_name!r} from {annotation_path.name} is not present in the final class list"
-                )
+                logger.debug("%s contains class %r outside the allowed class list; skipped object", annotation_path.name, class_name)
+                continue
 
-            x_center, y_center, width, height = _to_yolo_bbox(
+            yolo_bbox = _to_yolo_bbox(
                 bbox,
                 image_width=image_width,
                 image_height=image_height,
             )
+            if yolo_bbox is None:
+                logger.debug("%s has one bbox completely outside image bounds; skipped object", annotation_path.name)
+                continue
+            x_center, y_center, width, height = yolo_bbox
             lines.append(
                 f"{class_to_id[class_name]} "
                 f"{x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}"
