@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 import shutil
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Mapping
 
 from odp_platform.data_pipeline.split.manifest import PreparedSample
+
+
+def _windows_long_path(path: Path) -> str:
+    resolved = str(path.resolve())
+    if os.name == "nt" and not resolved.startswith("\\\\?\\"):
+        return "\\\\?\\" + resolved
+    return resolved
+
+
+def _copy2(src: Path, dst: Path) -> None:
+    shutil.copy2(_windows_long_path(src), _windows_long_path(dst))
 
 
 def materialize_splits(
@@ -30,8 +42,8 @@ def materialize_splits(
         for sample in samples:
             target_image = image_dir / sample.image_path.name
             target_label = label_dir / sample.label_path.name
-            shutil.copy2(sample.image_path, target_image)
-            shutil.copy2(sample.label_path, target_label)
+            _copy2(sample.image_path, target_image)
+            _copy2(sample.label_path, target_label)
             materialized_samples.append(
                 replace(
                     sample,

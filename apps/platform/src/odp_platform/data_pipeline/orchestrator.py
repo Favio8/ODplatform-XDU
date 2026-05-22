@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,6 +11,7 @@ from typing import Final
 
 from odp_platform.common.constants import (
     ANNOTATIONS_DIRNAME,
+    COVERAGE_SOFT_THRESHOLD,
     DEFAULT_MIN_COVERAGE,
     IMAGES_DIRNAME,
     LABELS_DIRNAME,
@@ -18,13 +20,12 @@ from odp_platform.common.constants import (
     SPLIT_VAL,
 )
 from odp_platform.common.paths import (
-    DATASET_CONFIGS_DIR,
     DATA_DIR,
-    RAW_DATASETS_DIR,
-    RAW_DATA_DIR,
-    YOLO_DATA_DIR,
+    dataset_yaml_path,
+    raw_dataset_root,
 )
-from odp_platform.data_pipeline.registry import ConvertOptions, get_converter
+from odp_platform.data_pipeline.registry import ConvertOptions
+from odp_platform.data_pipeline.service import convert_dataset
 from odp_platform.data_pipeline.split.manifest import ConversionManifest, PreparedSample
 from odp_platform.data_pipeline.split.materializer import materialize_splits
 from odp_platform.data_pipeline.split.splitter import split_pairs
@@ -52,17 +53,15 @@ class OrchestrationResult:
 
 
 _SPLITS: Final[tuple[str, ...]] = (SPLIT_TRAIN, SPLIT_VAL, SPLIT_TEST)
+_COCO_SPLIT_DIRS: Final[tuple[str, ...]] = ("train", "valid", "val", "test")
+logger = logging.getLogger(__name__)
 
 
 def _resolve_source_root(options: ConvertOptions) -> Path:
     if options.source_root is not None:
         return options.source_root
 
-    if options.source_format == "pascal_voc" and options.dataset_name.lower() == "rsod" and RAW_DATA_DIR.exists():
-        return RAW_DATA_DIR
-    if options.source_format == "yolo" and options.dataset_name.lower() == "rsod" and YOLO_DATA_DIR.exists():
-        return YOLO_DATA_DIR
-    return RAW_DATASETS_DIR / options.dataset_name
+    return raw_dataset_root(options.dataset_name)
 
 
 def _resolve_data_root(data_root: Path | None) -> Path:
@@ -72,7 +71,7 @@ def _resolve_data_root(data_root: Path | None) -> Path:
 def _resolve_yaml_path(dataset_name: str, yaml_path: Path | None) -> Path:
     if yaml_path is not None:
         return Path(yaml_path)
-    return DATASET_CONFIGS_DIR / f"{dataset_name}.yaml"
+    return dataset_yaml_path(dataset_name)
 
 
 def _scan_voc_coverage(source_root: Path) -> CoverageReport:
@@ -130,23 +129,53 @@ def _detect_coco_annotation_file(source_root: Path, dataset_name: str) -> Path:
     matches = sorted(source_root.glob("*.json"))
     if matches:
         return matches[0]
+
+    split_matches: list[Path] = []
+    for split_name in _COCO_SPLIT_DIRS:
+        split_dir = source_root / split_name
+        if split_dir.exists():
+            split_matches.extend(sorted(split_dir.glob("*.json")))
+    if split_matches:
+        return split_matches[0]
+
     raise FileNotFoundError(f"No COCO annotation file found under {source_root}")
 
 
+def _detect_coco_annotation_files(source_root: Path, dataset_name: str) -> list[Path]:
+    split_matches: list[Path] = []
+    for split_name in _COCO_SPLIT_DIRS:
+        split_dir = source_root / split_name
+        if split_dir.exists():
+            split_matches.extend(sorted(split_dir.glob("*.json")))
+
+    if split_matches:
+        return split_matches
+    return [_detect_coco_annotation_file(source_root, dataset_name)]
+
+
 def _scan_coco_coverage(source_root: Path, dataset_name: str) -> CoverageReport:
-    images_dir = source_root / IMAGES_DIRNAME if (source_root / IMAGES_DIRNAME).exists() else source_root
-    annotation_file = _detect_coco_annotation_file(source_root, dataset_name)
-    payload = json.loads(annotation_file.read_text(encoding="utf-8"))
-    images = payload.get("images", [])
-    annotations = payload.get("annotations", [])
-    image_ids = {int(item["id"]) for item in images}
-    annotated_ids = {int(item["image_id"]) for item in annotations}
-    image_files = [path for path in images_dir.iterdir() if path.is_file()]
-    denominator = max(len(image_ids), len(image_files), 1)
-    matched = len(image_ids & annotated_ids)
+    image_count = 0
+    annotation_count = 0
+    matched = 0
+
+    for annotation_file in _detect_coco_annotation_files(source_root, dataset_name):
+        images_dir = annotation_file.parent if annotation_file.parent != source_root else (
+            source_root / IMAGES_DIRNAME if (source_root / IMAGES_DIRNAME).exists() else source_root
+        )
+        payload = json.loads(annotation_file.read_text(encoding="utf-8"))
+        images = payload.get("images", [])
+        annotations = payload.get("annotations", [])
+        image_ids = {int(item["id"]) for item in images}
+        annotated_ids = {int(item["image_id"]) for item in annotations}
+        image_files = [path for path in images_dir.iterdir() if path.is_file()]
+        image_count += max(len(image_ids), len(image_files))
+        annotation_count += len(annotated_ids)
+        matched += len(image_ids & annotated_ids)
+
+    denominator = max(image_count, 1)
     return CoverageReport(
-        image_count=max(len(image_ids), len(image_files)),
-        annotation_count=len(annotated_ids),
+        image_count=image_count,
+        annotation_count=annotation_count,
         matched_count=matched,
         coverage=matched / denominator,
     )
@@ -165,6 +194,12 @@ def _check_raw(options: ConvertOptions, source_root: Path, min_coverage: float) 
     if report.coverage < min_coverage:
         raise ValueError(
             f"Raw dataset coverage is below threshold: {report.coverage:.2%} < {min_coverage:.2%}"
+        )
+    if report.coverage < COVERAGE_SOFT_THRESHOLD:
+        logger.warning(
+            "Raw dataset coverage is below soft threshold: %.2f%% < %.2f%%",
+            report.coverage * 100.0,
+            COVERAGE_SOFT_THRESHOLD * 100.0,
         )
     return report
 
@@ -201,11 +236,10 @@ def prepare_dataset(
         source_root=source_root,
     )
 
-    converter = get_converter(convert_options.source_format)
     with TemporaryDirectory() as tmp_dir:
         temp_labels_dir = Path(tmp_dir) / LABELS_DIRNAME
-        manifest = converter.convert(
-            options=convert_options,
+        manifest = convert_dataset(
+            convert_options,
             source_root=source_root,
             output_labels_dir=temp_labels_dir,
         )

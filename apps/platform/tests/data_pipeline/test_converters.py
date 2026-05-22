@@ -114,6 +114,53 @@ def test_coco_segment_converter_merges_multi_polygon_annotations(tmp_path: Path)
     assert all(0.0 <= float(value) <= 1.0 for value in tokens[1:])
 
 
+def test_coco_converter_supports_roboflow_split_annotations(tmp_path: Path) -> None:
+    source_root = tmp_path / "roomwise"
+    for split_name in ("train", "valid", "test"):
+        split_dir = source_root / split_name
+        _write_image(split_dir / f"{split_name}_sample.jpg", size=(100, 100))
+        payload = {
+            "images": [
+                {"id": 1, "file_name": f"{split_name}_sample.jpg", "width": 100, "height": 100},
+            ],
+            "categories": [
+                {"id": 1, "name": "room"},
+            ],
+            "annotations": [
+                {
+                    "id": 1,
+                    "image_id": 1,
+                    "category_id": 1,
+                    "bbox": [10, 10, 50, 50],
+                    "segmentation": [[10, 10, 60, 10, 60, 60, 10, 60]],
+                }
+            ],
+        }
+        (split_dir / "_annotations.coco.json").write_text(
+            json.dumps(payload),
+            encoding="utf-8",
+        )
+
+    options = ConvertOptions(
+        dataset_name="roomwise",
+        source_format=FORMAT_COCO,
+        task=TASK_SEGMENT,
+    )
+    manifest = coco.convert(
+        options=options,
+        source_root=source_root,
+        output_labels_dir=tmp_path / "labels",
+    )
+
+    assert manifest.classes == ["room"]
+    assert len(manifest.samples) == 3
+    assert {sample.stem for sample in manifest.samples} == {
+        "train_train_sample",
+        "valid_valid_sample",
+        "test_test_sample",
+    }
+
+
 def test_yolo_converter_skips_invalid_txt_and_falls_back_to_copy(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
