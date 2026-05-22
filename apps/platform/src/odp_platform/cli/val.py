@@ -1,4 +1,8 @@
-"""CLI placeholder for evaluation orchestration."""
+"""CLI placeholder for evaluation orchestration.
+
+Future integration point: this command should call build_val_config()
+before dispatching to the actual evaluation service.
+"""
 
 
 def main() -> int:

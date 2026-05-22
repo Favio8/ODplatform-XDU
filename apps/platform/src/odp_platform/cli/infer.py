@@ -1,4 +1,8 @@
-"""CLI placeholder for inference orchestration."""
+"""CLI placeholder for inference orchestration.
+
+Future integration point: this command should call build_infer_config()
+before dispatching to the actual inference service.
+"""
 
 
 def main() -> int:

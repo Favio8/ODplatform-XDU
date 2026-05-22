@@ -1,10 +1,46 @@
-experiment:
-  name: rsod-train-example
-data:
-  source: data/RSOD/raw
-  target: data/RSOD/yolo
-model:
-  weights: models/pretrained/yolo11n.pt
-train:
-  epochs: 100
-  image_size: 640
+# ODPlatform train runtime config template
+# Generated manually to match the D5 runtime configuration subsystem.
+
+# [runtime]
+# Algorithm semantics for the run.
+# Examples: 'detect', 'segment'
+# Tip: Use detect for bounding-box models.
+task_type: detect
+
+# Human-friendly experiment label used only by ODPlatform.
+# Examples: 'rsod-train-baseline'
+experiment_name: rsod-train-example
+
+# [input]
+# Dataset yaml path or dataset identifier consumed by Ultralytics.
+# Examples: 'apps/platform/configs/datasets/rsod.yaml'
+data: apps/platform/configs/datasets/rsod.yaml
+
+# [model]
+# Model weights or model identifier.
+# Examples: 'models/pretrained/yolo11n.pt'
+model: models/pretrained/yolo11n.pt
+
+# [output]
+# Output root directory used by Ultralytics.
+project: runs
+name: rsod-train-example
+
+# [runtime]
+# Execution device expression.
+device: cpu
+verbose: false
+
+# [train]
+epochs: 100
+imgsz: 640
+batch: 16
+patience: 50
+lr0: 0.01
+
+# [output]
+save: true
+save_period: -1
+
+# [performance]
+cache: false

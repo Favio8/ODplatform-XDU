@@ -1,8 +1,12 @@
-experiment:
-  name: rsod-val-example
-data:
-  source: data/RSOD/yolo
-model:
-  checkpoint: models/checkpoints/latest.pt
-validation:
-  batch_size: 16
+task_type: detect
+experiment_name: rsod-val-example
+data: apps/platform/configs/datasets/rsod.yaml
+model: models/checkpoints/latest.pt
+project: runs
+name: rsod-val-example
+device: cpu
+verbose: false
+batch: 16
+conf: 0.001
+iou: 0.6
+plots: false

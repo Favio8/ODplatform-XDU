@@ -1,4 +1,8 @@
-"""CLI placeholder for training orchestration."""
+"""CLI placeholder for training orchestration.
+
+Future integration point: this command should call build_train_config()
+before dispatching to the actual training service.
+"""
 
 
 def main() -> int:

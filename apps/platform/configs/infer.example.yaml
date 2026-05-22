@@ -1,8 +1,13 @@
-experiment:
-  name: rsod-infer-example
-data:
-  source: data/RSOD/yolo
-model:
-  checkpoint: models/checkpoints/latest.pt
-inference:
-  conf_threshold: 0.25
+task_type: detect
+experiment_name: rsod-infer-example
+data: apps/platform/configs/datasets/rsod.yaml
+model: models/checkpoints/latest.pt
+project: runs
+name: rsod-infer-example
+device: cpu
+verbose: false
+conf: 0.25
+iou: 0.7
+save_txt: false
+save_conf: false
+source: data/raw/rsod/images
