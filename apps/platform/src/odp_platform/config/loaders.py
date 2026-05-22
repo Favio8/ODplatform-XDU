@@ -67,7 +67,7 @@ def _read_text_with_fallback(path: Path) -> str:
 
 
 def _flatten_mapping(payload: Mapping[str, Any], config_cls: type[RuntimeConfigBase]) -> dict[str, Any]:
-    known_fields = set(config_cls.field_specs())
+    aliases = config_cls.field_name_aliases()
     values: dict[str, Any] = {}
     unknown_fields: list[str] = []
 
@@ -75,16 +75,18 @@ def _flatten_mapping(payload: Mapping[str, Any], config_cls: type[RuntimeConfigB
         if raw_value is None:
             continue
 
-        if key in known_fields:
-            values[key] = raw_value
+        normalized_key = aliases.get(str(key))
+        if normalized_key is not None:
+            values[normalized_key] = raw_value
             continue
 
         if isinstance(raw_value, Mapping):
             for nested_key, nested_value in raw_value.items():
                 if nested_value is None:
                     continue
-                if nested_key in known_fields:
-                    values[nested_key] = nested_value
+                normalized_nested_key = aliases.get(str(nested_key))
+                if normalized_nested_key is not None:
+                    values[normalized_nested_key] = nested_value
                 else:
                     unknown_fields.append(f"{key}.{nested_key}")
             continue
@@ -142,7 +144,7 @@ def load_cli_config(
         return ConfigSourcePayload(source_name="cli", values={})
 
     config_cls = get_config_class(task_kind)
-    allowed_fields = set(config_cls.field_specs())
+    aliases = config_cls.field_name_aliases()
     ignored = set(ignored_keys or set())
     ignored.update({"help"})
     raw_values = vars(namespace) if isinstance(namespace, argparse.Namespace) else dict(namespace)
@@ -152,8 +154,9 @@ def load_cli_config(
     for key, value in raw_values.items():
         if key in ignored or key.startswith("_") or value is None:
             continue
-        if key in allowed_fields:
-            values[key] = value
+        normalized_key = aliases.get(key)
+        if normalized_key is not None:
+            values[normalized_key] = value
         else:
             unknown_fields.append(key)
 

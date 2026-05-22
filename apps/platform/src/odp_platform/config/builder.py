@@ -67,16 +67,19 @@ def build_config(
 
 
 def build_train_config(**kwargs: Any) -> tuple[TrainConfig, ConfigTrace]:
+    """Build a validated train config plus full provenance trace."""
     config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_TRAIN, **kwargs)
     return config, trace  # type: ignore[return-value]
 
 
 def build_val_config(**kwargs: Any) -> tuple[ValConfig, ConfigTrace]:
+    """Build a validated validation config plus full provenance trace."""
     config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_VAL, **kwargs)
     return config, trace  # type: ignore[return-value]
 
 
 def build_infer_config(**kwargs: Any) -> tuple[InferConfig, ConfigTrace]:
+    """Build a validated inference config plus full provenance trace."""
     config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_INFER, **kwargs)
     return config, trace  # type: ignore[return-value]
 

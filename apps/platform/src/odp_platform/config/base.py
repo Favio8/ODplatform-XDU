@@ -44,6 +44,13 @@ class SourceOverride:
     source_name: str
     value: Any
 
+    @property
+    def source_label(self) -> str:
+        prefix = self.source_name.split(":", 1)[0].strip().upper()
+        if prefix in {"DEFAULT", "DEFAULTS"}:
+            return "DEFAULT"
+        return prefix or "UNKNOWN"
+
 
 @dataclass(frozen=True)
 class FieldTrace:
@@ -55,21 +62,39 @@ class FieldTrace:
     history: tuple[SourceOverride, ...]
     sensitive: bool = False
 
+    @property
+    def final_source_label(self) -> str:
+        return self.history[-1].source_label if self.history else "UNKNOWN"
+
+    def _render_value(self, value: Any, *, redact_sensitive: bool = True) -> str:
+        if redact_sensitive and self.sensitive:
+            return "***"
+        return str(value)
+
+    def to_effective_line(self, *, redact_sensitive: bool = True) -> str:
+        rendered_value = self._render_value(self.final_value, redact_sensitive=redact_sensitive)
+        return f"{self.field_name}: {rendered_value}  (来源: {self.final_source_label})"
+
+    def to_override_chain(self, *, redact_sensitive: bool = True) -> str:
+        rendered_history = [
+            f"{self._render_value(override.value, redact_sensitive=redact_sensitive)}({override.source_label})"
+            for override in self.history
+        ]
+        return f"{self.field_name}: " + " <- ".join(rendered_history)
+
     def to_human_readable(self, *, redact_sensitive: bool = True) -> str:
-        rendered_history: list[str] = []
-        for override in self.history:
-            value = "***" if redact_sensitive and self.sensitive else repr(override.value)
-            rendered_history.append(f"{override.source_name} -> {value}")
-        return f"{self.field_name}: " + " | ".join(rendered_history)
+        return self.to_override_chain(redact_sensitive=redact_sensitive)
 
     def to_dict(self, *, redact_sensitive: bool = True) -> dict[str, Any]:
         return {
             "field_name": self.field_name,
             "final_value": "***" if redact_sensitive and self.sensitive else self.final_value,
             "final_source": self.final_source,
+            "final_source_label": self.final_source_label,
             "history": [
                 {
                     "source_name": override.source_name,
+                    "source_label": override.source_label,
                     "value": "***" if redact_sensitive and self.sensitive else override.value,
                 }
                 for override in self.history
@@ -89,6 +114,32 @@ class ConfigTrace:
     def to_human_readable(self, *, redact_sensitive: bool = True) -> str:
         lines = [trace.to_human_readable(redact_sensitive=redact_sensitive) for trace in self.by_field.values()]
         return "\n".join(lines)
+
+    def to_effective_lines(
+        self,
+        *,
+        redact_sensitive: bool = True,
+        field_names: tuple[str, ...] | list[str] | None = None,
+    ) -> list[str]:
+        names = field_names or list(self.by_field)
+        return [
+            self.by_field[name].to_effective_line(redact_sensitive=redact_sensitive)
+            for name in names
+            if name in self.by_field
+        ]
+
+    def to_override_lines(
+        self,
+        *,
+        redact_sensitive: bool = True,
+        field_names: tuple[str, ...] | list[str] | None = None,
+    ) -> list[str]:
+        names = field_names or list(self.by_field)
+        return [
+            self.by_field[name].to_override_chain(redact_sensitive=redact_sensitive)
+            for name in names
+            if name in self.by_field
+        ]
 
     def to_dict(self, *, redact_sensitive: bool = True) -> dict[str, dict[str, Any]]:
         return {
@@ -127,6 +178,7 @@ class RuntimeConfigBase(BaseModel):
             examples=SUPPORTED_TASKS,
             tuning_tips=("Use detect for bounding-box models.", "Use segment for polygon or mask outputs."),
             group="runtime",
+            yaml_key="task",
         ),
         "experiment_name": FieldSpec(
             description="Human-friendly experiment label used only by ODPlatform.",
@@ -197,10 +249,28 @@ class RuntimeConfigBase(BaseModel):
     def to_runtime_dict(self) -> dict[str, Any]:
         return self.model_dump()
 
+    @classmethod
+    def external_field_name(cls, field_name: str) -> str:
+        spec = cls.field_specs().get(field_name)
+        if spec is None:
+            return field_name
+        return spec.yaml_key or field_name
+
+    @classmethod
+    def field_name_aliases(cls) -> dict[str, str]:
+        aliases: dict[str, str] = {}
+        for field_name, spec in cls.field_specs().items():
+            aliases[field_name] = field_name
+            if spec.yaml_key:
+                aliases[spec.yaml_key] = field_name
+            if spec.cli_name:
+                aliases[spec.cli_name] = field_name
+        return aliases
+
     def to_ultralytics_kwargs(self) -> dict[str, Any]:
         payload = self.model_dump()
         return {
-            key: value
+            self.external_field_name(key): value
             for key, value in payload.items()
             if key not in self.internal_fields() and value is not None and value != ""
         }
@@ -232,11 +302,65 @@ class TrainConfig(RuntimeConfigBase):
     epochs: int = Field(default=100, ge=1)
     imgsz: int = Field(default=640, ge=32)
     batch: int = Field(default=16, ge=0)
+    workers: int = Field(default=8, ge=0)
     patience: int = Field(default=50, ge=0)
     lr0: float = Field(default=0.01, gt=0.0)
+    lrf: float = Field(default=0.01, ge=0.0)
+    momentum: float = Field(default=0.937, ge=0.0)
+    weight_decay: float = Field(default=0.0005, ge=0.0)
     save: bool = Field(default=True)
     save_period: int = Field(default=-1)
     cache: bool = Field(default=False)
+    rect: bool = Field(default=False)
+    amp: bool = Field(default=True)
+    exist_ok: bool = Field(default=False)
+    seed: int = Field(default=0)
+    deterministic: bool = Field(default=True)
+    time: float | None = Field(default=None)
+    resume: bool = Field(default=False)
+    close_mosaic: int = Field(default=10, ge=0)
+    multi_scale: bool = Field(default=False)
+    fraction: float = Field(default=1.0, gt=0.0, le=1.0)
+    freeze: int | list[int] | None = Field(default=None)
+    optimizer: str = Field(default="auto")
+    cos_lr: bool = Field(default=False)
+    warmup_epochs: float = Field(default=3.0, ge=0.0)
+    warmup_momentum: float = Field(default=0.8, ge=0.0)
+    warmup_bias_lr: float = Field(default=0.1, ge=0.0)
+    box: float = Field(default=7.5, ge=0.0)
+    cls: float = Field(default=0.5, ge=0.0)
+    dfl: float = Field(default=1.5, ge=0.0)
+    pose: float = Field(default=12.0, ge=0.0)
+    kobj: float = Field(default=2.0, ge=0.0)
+    nbs: int = Field(default=64, ge=1)
+    hsv_h: float = Field(default=0.015, ge=0.0)
+    hsv_s: float = Field(default=0.7, ge=0.0)
+    hsv_v: float = Field(default=0.4, ge=0.0)
+    bgr: float = Field(default=0.0, ge=0.0, le=1.0)
+    degrees: float = Field(default=0.0)
+    translate: float = Field(default=0.1, ge=0.0)
+    scale: float = Field(default=0.5, ge=0.0)
+    shear: float = Field(default=0.0)
+    perspective: float = Field(default=0.0, ge=0.0)
+    flipud: float = Field(default=0.0, ge=0.0, le=1.0)
+    fliplr: float = Field(default=0.5, ge=0.0, le=1.0)
+    mosaic: float = Field(default=1.0, ge=0.0, le=1.0)
+    mixup: float = Field(default=0.0, ge=0.0, le=1.0)
+    copy_paste: float = Field(default=0.0, ge=0.0, le=1.0)
+    val: bool = Field(default=True)
+    plots: bool = Field(default=True)
+    overlap_mask: bool = Field(default=True)
+    mask_ratio: int = Field(default=4, ge=1)
+    dropout: float = Field(default=0.0, ge=0.0, le=1.0)
+    copy_paste_mode: str = Field(default="flip")
+    auto_augment: str = Field(default="randaugment")
+    erasing: float = Field(default=0.4, ge=0.0, le=1.0)
+    pretrained: bool | str = Field(default=True)
+    single_cls: bool = Field(default=False)
+    classes: list[int] | None = Field(default=None)
+    compile: bool | str = Field(default=False)
+    profile: bool = Field(default=False)
+    augmentations: list[object] | None = Field(default=None)
 
     __field_specs__: Final[dict[str, FieldSpec]] = RuntimeConfigBase.field_specs() | {
         "epochs": FieldSpec(
@@ -260,6 +384,13 @@ class TrainConfig(RuntimeConfigBase):
             tuning_tips=("Use 0 only if the downstream runner supports auto-batch.",),
             group="train",
         ),
+        "workers": FieldSpec(
+            description="Number of dataloader workers.",
+            default=8,
+            examples=(0, 4, 8),
+            tuning_tips=("Windows users can reduce this when multiprocessing is unstable.",),
+            group="performance",
+        ),
         "patience": FieldSpec(
             description="Early-stopping patience.",
             default=50,
@@ -274,6 +405,9 @@ class TrainConfig(RuntimeConfigBase):
             tuning_tips=("Reduce when training is unstable or diverges early.",),
             group="train",
         ),
+        "lrf": FieldSpec(description="Final learning-rate ratio.", default=0.01, group="train"),
+        "momentum": FieldSpec(description="Optimizer momentum or beta1.", default=0.937, group="optimizer"),
+        "weight_decay": FieldSpec(description="Weight decay used by the optimizer.", default=0.0005, group="optimizer"),
         "save": FieldSpec(
             description="Whether to save checkpoints.",
             default=True,
@@ -295,6 +429,56 @@ class TrainConfig(RuntimeConfigBase):
             tuning_tips=("Enable only when disk and memory pressure are acceptable.",),
             group="performance",
         ),
+        "rect": FieldSpec(description="Whether to enable rectangular training.", default=False, group="input"),
+        "amp": FieldSpec(description="Whether to enable AMP mixed precision.", default=True, group="runtime"),
+        "exist_ok": FieldSpec(description="Allow reusing an existing output directory.", default=False, group="output"),
+        "seed": FieldSpec(description="Random seed for reproducibility.", default=0, group="runtime"),
+        "deterministic": FieldSpec(description="Force deterministic training algorithms.", default=True, group="runtime"),
+        "time": FieldSpec(description="Maximum training time in hours.", default=None, group="train"),
+        "resume": FieldSpec(description="Resume from the latest checkpoint.", default=False, group="train"),
+        "close_mosaic": FieldSpec(description="Disable mosaic in the last N epochs.", default=10, group="augmentation"),
+        "multi_scale": FieldSpec(description="Enable multiscale training.", default=False, group="augmentation"),
+        "fraction": FieldSpec(description="Fraction of training data to use.", default=1.0, group="train"),
+        "freeze": FieldSpec(description="Layer freezing strategy.", default=None, group="model"),
+        "optimizer": FieldSpec(description="Optimizer selection.", default="auto", group="optimizer"),
+        "cos_lr": FieldSpec(description="Use cosine learning-rate scheduling.", default=False, group="optimizer"),
+        "warmup_epochs": FieldSpec(description="Warmup duration in epochs.", default=3.0, group="optimizer"),
+        "warmup_momentum": FieldSpec(description="Warmup starting momentum.", default=0.8, group="optimizer"),
+        "warmup_bias_lr": FieldSpec(description="Warmup learning rate for bias terms.", default=0.1, group="optimizer"),
+        "box": FieldSpec(description="Box loss gain.", default=7.5, group="loss"),
+        "cls": FieldSpec(description="Classification loss gain.", default=0.5, group="loss"),
+        "dfl": FieldSpec(description="Distribution focal loss gain.", default=1.5, group="loss"),
+        "pose": FieldSpec(description="Pose loss gain.", default=12.0, group="loss"),
+        "kobj": FieldSpec(description="Keypoint objectness loss gain.", default=2.0, group="loss"),
+        "nbs": FieldSpec(description="Nominal batch size used for normalization.", default=64, group="loss"),
+        "hsv_h": FieldSpec(description="HSV hue augmentation.", default=0.015, group="augmentation"),
+        "hsv_s": FieldSpec(description="HSV saturation augmentation.", default=0.7, group="augmentation"),
+        "hsv_v": FieldSpec(description="HSV value augmentation.", default=0.4, group="augmentation"),
+        "bgr": FieldSpec(description="Probability of RGB/BGR channel reversal.", default=0.0, group="augmentation"),
+        "degrees": FieldSpec(description="Rotation augmentation in degrees.", default=0.0, group="augmentation"),
+        "translate": FieldSpec(description="Translation augmentation ratio.", default=0.1, group="augmentation"),
+        "scale": FieldSpec(description="Scale augmentation gain.", default=0.5, group="augmentation"),
+        "shear": FieldSpec(description="Shear augmentation angle.", default=0.0, group="augmentation"),
+        "perspective": FieldSpec(description="Perspective augmentation amount.", default=0.0, group="augmentation"),
+        "flipud": FieldSpec(description="Vertical flip probability.", default=0.0, group="augmentation"),
+        "fliplr": FieldSpec(description="Horizontal flip probability.", default=0.5, group="augmentation"),
+        "mosaic": FieldSpec(description="Mosaic augmentation probability.", default=1.0, group="augmentation"),
+        "mixup": FieldSpec(description="MixUp augmentation probability.", default=0.0, group="augmentation"),
+        "copy_paste": FieldSpec(description="Copy-paste augmentation probability.", default=0.0, group="augmentation"),
+        "val": FieldSpec(description="Run validation during training.", default=True, group="validation"),
+        "plots": FieldSpec(description="Generate training plots.", default=True, group="output"),
+        "overlap_mask": FieldSpec(description="Merge overlapping masks for segmentation tasks.", default=True, group="task"),
+        "mask_ratio": FieldSpec(description="Mask downsample ratio.", default=4, group="task"),
+        "dropout": FieldSpec(description="Dropout ratio for classification tasks.", default=0.0, group="task"),
+        "copy_paste_mode": FieldSpec(description="Copy-paste mode for segmentation.", default="flip", group="task"),
+        "auto_augment": FieldSpec(description="Auto augmentation policy.", default="randaugment", group="task"),
+        "erasing": FieldSpec(description="Random erasing probability.", default=0.4, group="task"),
+        "pretrained": FieldSpec(description="Pretrained weight strategy.", default=True, group="model"),
+        "single_cls": FieldSpec(description="Treat all labels as a single class.", default=False, group="task"),
+        "classes": FieldSpec(description="Subset of class IDs to train.", default=None, group="task"),
+        "compile": FieldSpec(description="Compile the model graph when supported.", default=False, group="runtime"),
+        "profile": FieldSpec(description="Enable speed profiling.", default=False, group="runtime"),
+        "augmentations": FieldSpec(description="Custom augmentation configuration.", default=None, group="augmentation"),
     }
 
 

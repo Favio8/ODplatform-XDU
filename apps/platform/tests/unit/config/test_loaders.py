@@ -19,6 +19,14 @@ def test_load_yaml_config_reads_flat_values(tmp_path: Path) -> None:
     assert payload.values["imgsz"] == 960
 
 
+def test_load_yaml_config_supports_task_alias_key(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "train.yaml"
+    yaml_path.write_text("task: detect\nepochs: 12\n", encoding="utf-8")
+
+    payload = load_yaml_config(task_kind=RUNTIME_TASK_TRAIN, config_path=yaml_path)
+    assert payload.values["task_type"] == "detect"
+
+
 def test_load_yaml_config_rejects_non_mapping_root(tmp_path: Path) -> None:
     yaml_path = tmp_path / "train.yaml"
     yaml_path.write_text("- item\n", encoding="utf-8")

@@ -41,12 +41,13 @@ def _build_template_text(config_cls: type[RuntimeConfigBase], task_kind: str) ->
         for field_name, spec in entries:
             if spec.internal:
                 continue
+            output_name = config_cls.external_field_name(field_name)
             lines.append(f"# {spec.description}")
             if spec.examples:
                 lines.append("# Examples: " + ", ".join(repr(item) for item in spec.examples))
             for tip in spec.tuning_tips:
                 lines.append(f"# Tip: {tip}")
-            lines.append(f"{field_name}: {_serialize_scalar(spec.default)}")
+            lines.append(f"{output_name}: {_serialize_scalar(spec.default)}")
             lines.append("")
 
     lines.extend(
