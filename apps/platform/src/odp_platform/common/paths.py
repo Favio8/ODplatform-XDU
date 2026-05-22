@@ -169,7 +169,6 @@ def get_dirs_to_initialize() -> list[Path]:
         PRETRAINED_MODELS_DIR,
         CHECKPOINTS_DIR,
         RUNS_DIR,
-        VALIDATION_RUNS_DIR,
         DOCS_DIR,
         TESTS_DIR,
         SCRIPTS_DIR,
