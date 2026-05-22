@@ -1,12 +1,6 @@
-"""Inference configuration placeholders."""
+"""Inference config compatibility exports."""
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-from .base import BaseConfig
+from odp_platform.config.base import InferConfig
 
 
-@dataclass(slots=True)
-class InferConfig(BaseConfig):
-    conf_threshold: float = 0.25
+__all__ = ["InferConfig"]

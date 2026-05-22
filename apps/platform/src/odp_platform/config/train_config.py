@@ -1,13 +1,6 @@
-"""Training configuration placeholders."""
+"""Training config compatibility exports."""
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-from .base import BaseConfig
+from odp_platform.config.base import TrainConfig
 
 
-@dataclass(slots=True)
-class TrainConfig(BaseConfig):
-    epochs: int = 100
-    image_size: int = 640
+__all__ = ["TrainConfig"]

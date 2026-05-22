@@ -1,12 +1,6 @@
-"""Validation configuration placeholders."""
+"""Validation config compatibility exports."""
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-
-from .base import BaseConfig
+from odp_platform.config.base import ValConfig
 
 
-@dataclass(slots=True)
-class ValConfig(BaseConfig):
-    batch_size: int = 16
+__all__ = ["ValConfig"]

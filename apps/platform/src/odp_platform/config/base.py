@@ -1,12 +1,424 @@
-"""Base configuration model."""
+"""Metadata-driven runtime configuration models."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any, Final, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from odp_platform.common.constants import (
+    RUNTIME_TASK_INFER,
+    RUNTIME_TASK_TRAIN,
+    RUNTIME_TASK_VAL,
+    SUPPORTED_RUNTIME_TASKS,
+    SUPPORTED_TASKS,
+    TASK_DETECT,
+)
 
 
-@dataclass(slots=True)
-class BaseConfig:
-    name: str = "default"
-    extras: dict[str, Any] = field(default_factory=dict)
+RuntimeTaskKind = Literal["train", "val", "infer"]
+SemanticsTaskType = Literal["detect", "segment"]
+
+
+@dataclass(frozen=True)
+class FieldSpec:
+    """Single-source metadata for one configurable field."""
+
+    description: str
+    default: Any
+    examples: tuple[Any, ...] = ()
+    tuning_tips: tuple[str, ...] = ()
+    group: str = "general"
+    sensitive: bool = False
+    internal: bool = False
+    cli_name: str | None = None
+    yaml_key: str | None = None
+
+
+@dataclass(frozen=True)
+class SourceOverride:
+    """One value provided by one config source before merge."""
+
+    source_name: str
+    value: Any
+
+
+@dataclass(frozen=True)
+class FieldTrace:
+    """Merged provenance chain for one field."""
+
+    field_name: str
+    final_value: Any
+    final_source: str
+    history: tuple[SourceOverride, ...]
+    sensitive: bool = False
+
+    def to_human_readable(self, *, redact_sensitive: bool = True) -> str:
+        rendered_history: list[str] = []
+        for override in self.history:
+            value = "***" if redact_sensitive and self.sensitive else repr(override.value)
+            rendered_history.append(f"{override.source_name} -> {value}")
+        return f"{self.field_name}: " + " | ".join(rendered_history)
+
+    def to_dict(self, *, redact_sensitive: bool = True) -> dict[str, Any]:
+        return {
+            "field_name": self.field_name,
+            "final_value": "***" if redact_sensitive and self.sensitive else self.final_value,
+            "final_source": self.final_source,
+            "history": [
+                {
+                    "source_name": override.source_name,
+                    "value": "***" if redact_sensitive and self.sensitive else override.value,
+                }
+                for override in self.history
+            ],
+        }
+
+
+@dataclass(frozen=True)
+class ConfigTrace:
+    """Full provenance for one built configuration."""
+
+    by_field: dict[str, FieldTrace]
+
+    def get(self, field_name: str) -> FieldTrace:
+        return self.by_field[field_name]
+
+    def to_human_readable(self, *, redact_sensitive: bool = True) -> str:
+        lines = [trace.to_human_readable(redact_sensitive=redact_sensitive) for trace in self.by_field.values()]
+        return "\n".join(lines)
+
+    def to_dict(self, *, redact_sensitive: bool = True) -> dict[str, dict[str, Any]]:
+        return {
+            name: trace.to_dict(redact_sensitive=redact_sensitive)
+            for name, trace in self.by_field.items()
+        }
+
+
+class RuntimeConfigBase(BaseModel):
+    """Base runtime configuration shared by train/val/infer tasks."""
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+
+    task_kind: RuntimeTaskKind = Field(default=RUNTIME_TASK_TRAIN)
+    task_type: SemanticsTaskType = Field(default=TASK_DETECT)
+    experiment_name: str = Field(default="")
+    data: str = Field(default="")
+    model: str = Field(default="")
+    project: str = Field(default="runs")
+    name: str = Field(default="")
+    device: str = Field(default="")
+    verbose: bool = Field(default=False)
+
+    __field_specs__: Final[dict[str, FieldSpec]] = {
+        "task_kind": FieldSpec(
+            description="Runtime task kind used by ODPlatform.",
+            default=RUNTIME_TASK_TRAIN,
+            examples=(RUNTIME_TASK_TRAIN, RUNTIME_TASK_VAL, RUNTIME_TASK_INFER),
+            tuning_tips=("Usually inferred by the builder and not edited manually.",),
+            group="runtime",
+            internal=True,
+        ),
+        "task_type": FieldSpec(
+            description="Algorithm semantics for the run.",
+            default=TASK_DETECT,
+            examples=SUPPORTED_TASKS,
+            tuning_tips=("Use detect for bounding-box models.", "Use segment for polygon or mask outputs."),
+            group="runtime",
+        ),
+        "experiment_name": FieldSpec(
+            description="Human-friendly experiment label used only by ODPlatform.",
+            default="",
+            examples=("rsod-train-baseline",),
+            tuning_tips=("Safe to leave empty when you do not need custom naming.",),
+            group="runtime",
+            internal=True,
+        ),
+        "data": FieldSpec(
+            description="Dataset yaml path or dataset identifier consumed by Ultralytics.",
+            default="",
+            examples=("apps/platform/configs/datasets/rsod.yaml",),
+            tuning_tips=("Prefer the dataset yaml generated by the data pipeline.",),
+            group="input",
+        ),
+        "model": FieldSpec(
+            description="Model weights or model identifier.",
+            default="",
+            examples=("models/pretrained/yolo11n.pt",),
+            tuning_tips=("Use a pretrained checkpoint for most training runs.",),
+            group="model",
+        ),
+        "project": FieldSpec(
+            description="Output root directory used by Ultralytics.",
+            default="runs",
+            examples=("runs", "runs/train"),
+            tuning_tips=("Keep results under the repository runs/ tree for easy cleanup.",),
+            group="output",
+        ),
+        "name": FieldSpec(
+            description="Ultralytics run name.",
+            default="",
+            examples=("exp", "baseline_v1"),
+            tuning_tips=("Leave empty to let the runner pick a default name.",),
+            group="output",
+        ),
+        "device": FieldSpec(
+            description="Execution device expression.",
+            default="",
+            examples=("cpu", "0", "0,1"),
+            tuning_tips=("Use cpu when no CUDA device is available.",),
+            group="runtime",
+        ),
+        "verbose": FieldSpec(
+            description="Whether Ultralytics should emit verbose logs.",
+            default=False,
+            examples=(False, True),
+            tuning_tips=("Enable when debugging configuration or data issues.",),
+            group="runtime",
+        ),
+    }
+
+    __internal_fields__: Final[tuple[str, ...]] = ("task_kind", "experiment_name")
+
+    @classmethod
+    def field_specs(cls) -> dict[str, FieldSpec]:
+        return dict(cls.__field_specs__)
+
+    @classmethod
+    def internal_fields(cls) -> tuple[str, ...]:
+        return tuple(cls.__internal_fields__)
+
+    @classmethod
+    def task_kind_name(cls) -> RuntimeTaskKind:
+        return cls.field_specs()["task_kind"].default
+
+    def to_runtime_dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
+    def to_ultralytics_kwargs(self) -> dict[str, Any]:
+        payload = self.model_dump()
+        return {
+            key: value
+            for key, value in payload.items()
+            if key not in self.internal_fields() and value is not None and value != ""
+        }
+
+    def to_snapshot(self) -> dict[str, Any]:
+        return {
+            "config_type": type(self).__name__,
+            "task_kind": self.task_kind,
+            "values": self.model_dump(),
+        }
+
+    @classmethod
+    def from_snapshot(cls, snapshot: Mapping[str, Any]) -> RuntimeConfigBase:
+        values = snapshot.get("values")
+        if not isinstance(values, Mapping):
+            raise ValueError("snapshot.values must be a mapping")
+        return cls.model_validate(dict(values))
+
+    @classmethod
+    def examples_by_group(cls) -> dict[str, list[tuple[str, FieldSpec]]]:
+        grouped: dict[str, list[tuple[str, FieldSpec]]] = {}
+        for field_name, spec in cls.field_specs().items():
+            grouped.setdefault(spec.group, []).append((field_name, spec))
+        return grouped
+
+
+class TrainConfig(RuntimeConfigBase):
+    task_kind: RuntimeTaskKind = Field(default=RUNTIME_TASK_TRAIN)
+    epochs: int = Field(default=100, ge=1)
+    imgsz: int = Field(default=640, ge=32)
+    batch: int = Field(default=16, ge=0)
+    patience: int = Field(default=50, ge=0)
+    lr0: float = Field(default=0.01, gt=0.0)
+    save: bool = Field(default=True)
+    save_period: int = Field(default=-1)
+    cache: bool = Field(default=False)
+
+    __field_specs__: Final[dict[str, FieldSpec]] = RuntimeConfigBase.field_specs() | {
+        "epochs": FieldSpec(
+            description="Total number of training epochs.",
+            default=100,
+            examples=(100, 300),
+            tuning_tips=("Increase for larger datasets if validation still improves.",),
+            group="train",
+        ),
+        "imgsz": FieldSpec(
+            description="Training image size in pixels.",
+            default=640,
+            examples=(640, 1024),
+            tuning_tips=("Keep it divisible by the model stride; larger sizes need more VRAM.",),
+            group="train",
+        ),
+        "batch": FieldSpec(
+            description="Batch size per iteration.",
+            default=16,
+            examples=(8, 16, 32),
+            tuning_tips=("Use 0 only if the downstream runner supports auto-batch.",),
+            group="train",
+        ),
+        "patience": FieldSpec(
+            description="Early-stopping patience.",
+            default=50,
+            examples=(20, 50),
+            tuning_tips=("Lower values stop faster when validation no longer improves.",),
+            group="train",
+        ),
+        "lr0": FieldSpec(
+            description="Initial learning rate.",
+            default=0.01,
+            examples=(0.01, 0.001),
+            tuning_tips=("Reduce when training is unstable or diverges early.",),
+            group="train",
+        ),
+        "save": FieldSpec(
+            description="Whether to save checkpoints.",
+            default=True,
+            examples=(True, False),
+            tuning_tips=("Disable only for throwaway experiments.",),
+            group="output",
+        ),
+        "save_period": FieldSpec(
+            description="Checkpoint save interval in epochs.",
+            default=-1,
+            examples=(-1, 10),
+            tuning_tips=("Use -1 to disable periodic saves and keep only final checkpoints.",),
+            group="output",
+        ),
+        "cache": FieldSpec(
+            description="Whether to cache images for faster training.",
+            default=False,
+            examples=(False, True),
+            tuning_tips=("Enable only when disk and memory pressure are acceptable.",),
+            group="performance",
+        ),
+    }
+
+
+class ValConfig(RuntimeConfigBase):
+    task_kind: RuntimeTaskKind = Field(default=RUNTIME_TASK_VAL)
+    batch: int = Field(default=16, ge=1)
+    conf: float = Field(default=0.001, ge=0.0, le=1.0)
+    iou: float = Field(default=0.6, ge=0.0, le=1.0)
+    plots: bool = Field(default=False)
+
+    __field_specs__: Final[dict[str, FieldSpec]] = RuntimeConfigBase.field_specs() | {
+        "batch": FieldSpec(
+            description="Validation batch size.",
+            default=16,
+            examples=(8, 16, 32),
+            tuning_tips=("Reduce when validation runs out of memory.",),
+            group="validation",
+        ),
+        "conf": FieldSpec(
+            description="Confidence threshold used during validation.",
+            default=0.001,
+            examples=(0.001, 0.25),
+            tuning_tips=("Keep low for benchmark-style evaluation.",),
+            group="validation",
+        ),
+        "iou": FieldSpec(
+            description="IoU threshold used during evaluation.",
+            default=0.6,
+            examples=(0.5, 0.6, 0.7),
+            tuning_tips=("Increase only when you intentionally want stricter overlap filtering.",),
+            group="validation",
+        ),
+        "plots": FieldSpec(
+            description="Whether to emit validation plots.",
+            default=False,
+            examples=(False, True),
+            tuning_tips=("Enable while debugging model behavior or reporting results.",),
+            group="output",
+        ),
+    }
+
+    __internal_fields__: Final[tuple[str, ...]] = RuntimeConfigBase.internal_fields() + ("task_type",)
+
+
+class InferConfig(RuntimeConfigBase):
+    task_kind: RuntimeTaskKind = Field(default=RUNTIME_TASK_INFER)
+    conf: float = Field(default=0.25, ge=0.0, le=1.0)
+    iou: float = Field(default=0.7, ge=0.0, le=1.0)
+    save_txt: bool = Field(default=False)
+    save_conf: bool = Field(default=False)
+    source: str = Field(default="")
+
+    __field_specs__: Final[dict[str, FieldSpec]] = RuntimeConfigBase.field_specs() | {
+        "conf": FieldSpec(
+            description="Confidence threshold used during inference.",
+            default=0.25,
+            examples=(0.25, 0.5),
+            tuning_tips=("Raise it when false positives are too noisy.",),
+            group="inference",
+        ),
+        "iou": FieldSpec(
+            description="IoU threshold for NMS during inference.",
+            default=0.7,
+            examples=(0.5, 0.7),
+            tuning_tips=("Lower it when overlapping predictions are being suppressed too aggressively.",),
+            group="inference",
+        ),
+        "save_txt": FieldSpec(
+            description="Whether to save txt prediction outputs.",
+            default=False,
+            examples=(False, True),
+            tuning_tips=("Enable when you need raw prediction files for downstream analysis.",),
+            group="output",
+        ),
+        "save_conf": FieldSpec(
+            description="Whether to include confidence scores in saved outputs.",
+            default=False,
+            examples=(False, True),
+            tuning_tips=("Useful only together with txt or custom output persistence.",),
+            group="output",
+        ),
+        "source": FieldSpec(
+            description="Input source for inference.",
+            default="",
+            examples=("data/images/demo.jpg", "0"),
+            tuning_tips=("Use file paths for images or a camera index for webcam demos.",),
+            group="input",
+        ),
+    }
+
+    __internal_fields__: Final[tuple[str, ...]] = RuntimeConfigBase.internal_fields() + ("task_type",)
+
+
+CONFIG_CLASS_BY_TASK: Final[dict[str, type[RuntimeConfigBase]]] = {
+    RUNTIME_TASK_TRAIN: TrainConfig,
+    RUNTIME_TASK_VAL: ValConfig,
+    RUNTIME_TASK_INFER: InferConfig,
+}
+
+
+def get_config_class(task_kind: str) -> type[RuntimeConfigBase]:
+    normalized = task_kind.strip().lower()
+    if normalized not in CONFIG_CLASS_BY_TASK:
+        raise ValueError(
+            f"Unsupported runtime task kind {task_kind!r}; expected one of {SUPPORTED_RUNTIME_TASKS}"
+        )
+    return CONFIG_CLASS_BY_TASK[normalized]
+
+
+def is_valid_task_type(task_type: str) -> bool:
+    return task_type in SUPPORTED_TASKS
+
+
+__all__ = [
+    "CONFIG_CLASS_BY_TASK",
+    "ConfigTrace",
+    "FieldSpec",
+    "FieldTrace",
+    "InferConfig",
+    "RuntimeConfigBase",
+    "SemanticsTaskType",
+    "SourceOverride",
+    "TrainConfig",
+    "ValConfig",
+    "get_config_class",
+    "is_valid_task_type",
+]

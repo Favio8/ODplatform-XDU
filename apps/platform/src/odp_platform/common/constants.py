@@ -7,6 +7,9 @@ from typing import Final
 
 TASK_DETECT: Final[str] = "detect"
 TASK_SEGMENT: Final[str] = "segment"
+RUNTIME_TASK_TRAIN: Final[str] = "train"
+RUNTIME_TASK_VAL: Final[str] = "val"
+RUNTIME_TASK_INFER: Final[str] = "infer"
 
 FORMAT_PASCAL_VOC: Final[str] = "pascal_voc"
 FORMAT_COCO: Final[str] = "coco"
@@ -48,6 +51,12 @@ SUPPORTED_TASKS: Final[tuple[str, ...]] = (
     TASK_SEGMENT,
 )
 
+SUPPORTED_RUNTIME_TASKS: Final[tuple[str, ...]] = (
+    RUNTIME_TASK_TRAIN,
+    RUNTIME_TASK_VAL,
+    RUNTIME_TASK_INFER,
+)
+
 SUPPORTED_DATASET_FORMATS: Final[tuple[str, ...]] = (
     FORMAT_PASCAL_VOC,
     FORMAT_COCO,
@@ -79,11 +88,15 @@ __all__ = [
     "PAIR_MISSING_ERROR_RATIO",
     "PAIR_MISSING_WARN_RATIO",
     "RATE_EPSILON",
+    "RUNTIME_TASK_INFER",
+    "RUNTIME_TASK_TRAIN",
+    "RUNTIME_TASK_VAL",
     "SCHEMA_VERSION",
     "SPLIT_TEST",
     "SPLIT_TRAIN",
     "SPLIT_VAL",
     "SUPPORTED_DATASET_FORMATS",
+    "SUPPORTED_RUNTIME_TASKS",
     "SUPPORTED_SPLITS",
     "SUPPORTED_TASKS",
     "TASK_DETECT",
