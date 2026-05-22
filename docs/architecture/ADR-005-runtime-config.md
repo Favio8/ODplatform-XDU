@@ -1,0 +1,30 @@
+# ADR-005 Runtime Config
+
+- Status: accepted
+- Decision: implement a dedicated metadata-driven runtime configuration subsystem under `odp_platform.config`
+- Context:
+  - training, validation, and inference commands need a single source of truth for runtime parameters
+  - placeholder config files could not provide validation, provenance, or template generation
+  - the SRS requires fail-fast loading, source traceability, and automatic YAML template generation
+- Key decisions:
+  - define field values and field metadata together inside config model classes
+  - use task-specific config models (`TrainConfig`, `ValConfig`, `InferConfig`) on top of one shared base model
+  - load multiple sources separately, then merge them with explicit ordered priority instead of hard-coding precedence inside loaders
+  - preserve provenance as a structured trace object per field so validation errors can include source history
+  - keep preview and validated build as separate public flows
+  - generate YAML templates directly from metadata rather than maintaining hand-written templates
+  - keep train/val/infer execution CLIs as placeholders for now and expose a separate `odp-generate-config` entrypoint first
+- Rejected alternatives:
+  - scattering defaults, comments, and examples across YAML templates and CLI code
+  - using `Enum` types for all task vocabulary despite the project already standardizing on string constants
+  - tightly coupling config loading to Ultralytics execution logic in the same layer
+  - silently generating defaults when a requested YAML file is missing
+- Consequences:
+  - adding a new field only requires updating the model metadata, not loader or generator internals
+  - generated templates stay aligned with runtime config definitions
+  - downstream training/validation/inference services can later integrate through `build_*_config()` without reimplementing parsing or merge logic
+  - provenance and validation are available without requiring Ultralytics or GPUs in tests
+- Known boundaries:
+  - real train/val/infer execution is still out of scope for this iteration
+  - cross-field validation currently covers the key contradictions and warning cases needed by the SRS, not every future task-specific nuance
+  - sensitive-field redaction hooks exist in trace structures, but no real sensitive runtime fields are modeled yet
