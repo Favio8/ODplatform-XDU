@@ -1,0 +1,81 @@
+"""Validation helpers for runtime configuration objects."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from pydantic import ValidationError
+
+from odp_platform.common.constants import SUPPORTED_TASKS, TASK_DETECT
+from odp_platform.config.base import ConfigTrace, RuntimeConfigBase, TrainConfig
+
+
+@dataclass(frozen=True)
+class ConfigWarning:
+    field_name: str
+    message: str
+
+
+class ConfigBuildError(ValueError):
+    """Raised when a runtime config cannot be validated safely."""
+
+
+def _task_type_error_message(task_type: str) -> str:
+    return (
+        f"task_type={task_type!r} is not supported. "
+        f"Expected one of {SUPPORTED_TASKS}. "
+        "If you intended to label this run, use experiment_name instead."
+    )
+
+
+def _format_trace_suffix(field_name: str, trace: ConfigTrace) -> str:
+    try:
+        field_trace = trace.get(field_name)
+    except KeyError:
+        return ""
+    return f" Source trace: {field_trace.to_human_readable()}"
+
+
+def validate_config(
+    config_cls: type[RuntimeConfigBase],
+    values: dict[str, object],
+    trace: ConfigTrace,
+) -> tuple[RuntimeConfigBase, list[ConfigWarning]]:
+    """Validate one merged config dict and return warnings separately."""
+
+    task_type = str(values.get("task_type", TASK_DETECT))
+    if task_type not in SUPPORTED_TASKS:
+        raise ConfigBuildError(_task_type_error_message(task_type) + _format_trace_suffix("task_type", trace))
+
+    try:
+        config = config_cls.model_validate(values)
+    except ValidationError as exc:
+        first_error = exc.errors()[0]
+        location = first_error["loc"][0] if first_error.get("loc") else "unknown"
+        message = first_error.get("msg", str(exc))
+        raise ConfigBuildError(f"Invalid field {location!r}: {message}.{_format_trace_suffix(str(location), trace)}") from exc
+
+    warnings: list[ConfigWarning] = []
+    if isinstance(config, TrainConfig):
+        if not config.save and config.save_period > 0:
+            raise ConfigBuildError(
+                "Configuration is contradictory: save=False but save_period requests periodic checkpoints."
+                + _format_trace_suffix("save", trace)
+                + _format_trace_suffix("save_period", trace)
+            )
+        if not config.cache and config.batch == 0:
+            warnings.append(
+                ConfigWarning(
+                    field_name="batch",
+                    message="batch=0 while cache=False is allowed, but auto-batch may be slow or unsupported downstream.",
+                )
+            )
+
+    return config, warnings
+
+
+__all__ = [
+    "ConfigBuildError",
+    "ConfigWarning",
+    "validate_config",
+]
