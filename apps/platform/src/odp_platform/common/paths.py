@@ -54,6 +54,7 @@ DATA_DIR: Final[Path] = ROOT_DIR / "data"
 
 # D3 data pipeline 使用的通用数据集目录
 RAW_DATASETS_DIR: Final[Path] = DATA_DIR / "raw"
+PROCESSED_DATASETS_DIR: Final[Path] = DATA_DIR / "processed"
 YOLO_DATASETS_DIR: Final[Path] = DATA_DIR / "yolo"
 DATASET_CONFIGS_DIR: Final[Path] = PLATFORM_CONFIG_DIR / "datasets"
 
@@ -139,6 +140,15 @@ def raw_dataset_root(dataset_name: str) -> Path:
     return RAW_DATASETS_DIR / normalized_name
 
 
+def processed_dataset_root(dataset_name: str) -> Path:
+    """Return the canonical processed dataset root for one dataset."""
+
+    normalized_name = dataset_name.strip()
+    if not normalized_name:
+        raise ValueError("dataset_name must not be empty")
+    return PROCESSED_DATASETS_DIR / normalized_name
+
+
 def dataset_yaml_path(dataset_name: str) -> Path:
     """Return the canonical dataset-yaml path for one dataset."""
 
@@ -176,6 +186,7 @@ def get_dirs_to_initialize() -> list[Path]:
     return [
         DATA_DIR,
         RAW_DATASETS_DIR,
+        PROCESSED_DATASETS_DIR,
         YOLO_DATASETS_DIR,
         MODELS_DIR,
         PRETRAINED_MODELS_DIR,
@@ -276,9 +287,11 @@ __all__ = [
     "META_DIR",
     "META_LOGGING_DIR",
     "RAW_DATASETS_DIR",
+    "PROCESSED_DATASETS_DIR",
     "YOLO_DATASETS_DIR",
     "DATASET_CONFIGS_DIR",
     "raw_dataset_root",
+    "processed_dataset_root",
     "dataset_yaml_path",
     "runtime_config_path",
     "find_workspace_root",

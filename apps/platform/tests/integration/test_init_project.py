@@ -39,9 +39,11 @@ def test_common_workspace_path_constants() -> None:
     assert paths.META_DIR == paths.workspace_path(".odp-meta")
     assert paths.META_LOGGING_DIR == paths.META_DIR / "logs"
     assert paths.RAW_DATASETS_DIR == paths.data_path("raw")
+    assert paths.PROCESSED_DATASETS_DIR == paths.data_path("processed")
     assert paths.YOLO_DATASETS_DIR == paths.data_path("yolo")
     assert paths.DATASET_CONFIGS_DIR == paths.app_path("configs", "datasets")
     assert paths.raw_dataset_root("rsod") == paths.data_path("raw", "rsod")
+    assert paths.processed_dataset_root("rsod") == paths.data_path("processed", "rsod")
     assert paths.dataset_yaml_path("rsod") == paths.app_path("configs", "datasets", "rsod.yaml")
     assert paths.MODELS_DIR == paths.workspace_path("models")
     assert paths.CONFIGS_DIR == paths.PLATFORM_CONFIG_DIR
@@ -55,6 +57,7 @@ def test_common_workspace_path_constants() -> None:
     assert paths.run_path("demo") == paths.RUNS_DIR / "demo"
     assert paths.is_within_workspace(Path(paths.ROOT_DIR) / "apps")
     assert paths.RAW_DATASETS_DIR in paths.get_dirs_to_initialize()
+    assert paths.PROCESSED_DATASETS_DIR in paths.get_dirs_to_initialize()
     assert paths.YOLO_DATASETS_DIR in paths.get_dirs_to_initialize()
     assert paths.META_LOGGING_DIR in paths.get_dirs_to_initialize()
     assert paths.DATASET_CONFIGS_DIR in paths.get_dirs_to_initialize()

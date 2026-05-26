@@ -52,6 +52,8 @@ htmlcov/
 data/raw/*
 !data/raw/.gitkeep
 data/_backup_splits/
+data/processed/*
+!data/processed/.gitkeep
 data/yolo/*
 !data/yolo/.gitkeep
 data/train/

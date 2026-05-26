@@ -10,6 +10,7 @@ from PIL import Image
 
 from odp_platform.cli.transform_data import build_parser, main
 from odp_platform.common.constants import FORMAT_PASCAL_VOC, ODP_META_KEY
+from odp_platform.common.paths import processed_dataset_root
 from odp_platform.data_pipeline.orchestrator import prepare_dataset
 from odp_platform.data_pipeline.registry import ConvertOptions
 
@@ -133,6 +134,24 @@ def test_prepare_dataset_warns_below_soft_threshold(tmp_path: Path) -> None:
 
     assert result.coverage.coverage == pytest.approx(0.7)
     assert any("soft threshold" in message for message in handler.messages)
+
+
+def test_prepare_dataset_defaults_to_dataset_scoped_processed_root(tmp_path: Path) -> None:
+    source_root = _build_voc_dataset(tmp_path, images=3, annotations=3)
+    options = ConvertOptions(
+        dataset_name="scoped_voc",
+        source_format=FORMAT_PASCAL_VOC,
+        source_root=source_root,
+    )
+
+    result = prepare_dataset(
+        options,
+        yaml_path=tmp_path / "scoped.yaml",
+    )
+
+    expected_root = processed_dataset_root("scoped_voc")
+    assert result.yaml_path.exists()
+    assert result.split_map["train"][0].image_path.is_relative_to(expected_root)
 
 
 def test_transform_cli_rejects_unsupported_task_for_format() -> None:

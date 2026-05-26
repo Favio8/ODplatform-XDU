@@ -22,6 +22,7 @@ from odp_platform.common.constants import (
 from odp_platform.common.paths import (
     DATA_DIR,
     dataset_yaml_path,
+    processed_dataset_root,
     raw_dataset_root,
 )
 from odp_platform.data_pipeline.registry import ConvertOptions
@@ -221,7 +222,7 @@ def prepare_dataset(
 
     source_root = _resolve_source_root(options)
     coverage = _check_raw(options, source_root, min_coverage)
-    target_data_root = _resolve_data_root(data_root)
+    target_data_root = Path(data_root) if data_root is not None else processed_dataset_root(options.dataset_name)
     final_yaml_target = _resolve_yaml_path(options.dataset_name, yaml_path)
     _user_classes = list(options.classes) if options.classes is not None else None
     convert_options = ConvertOptions(
