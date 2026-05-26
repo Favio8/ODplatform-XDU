@@ -241,6 +241,11 @@ class RuntimeConfigBase(BaseModel):
     seed: int = Field(default=0)
     deterministic: bool = Field(default=True)
 
+    @property
+    def task(self) -> SemanticsTaskType:
+        """Compatibility alias for older code paths that still read `config.task`."""
+        return self.task_type
+
     __field_specs__: Final[dict[str, FieldSpec]] = {
         "task_kind": FieldSpec(
             description="Runtime task kind used by ODPlatform.",
