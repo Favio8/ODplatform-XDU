@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from odp_platform.common.constants import TASK_DETECT
-from odp_platform.config import TrainConfig
-from odp_platform.config.merger import merge_sources
-from odp_platform.config.validator import ConfigBuildError, validate_config
+from odp_platform.runtime_config import TrainConfig
+from odp_platform.runtime_config.merger_core import merge_sources
+from odp_platform.runtime_config.validator import ConfigBuildError, validate_config
 
 
 def _trace_for(values: dict[str, object]):

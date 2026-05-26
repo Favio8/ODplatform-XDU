@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from odp_platform.common.constants import RUNTIME_TASK_TRAIN
-from odp_platform.config.generator import generate_template
-from odp_platform.config.loaders import load_yaml_config
+from odp_platform.runtime_config.generator import generate_template
+from odp_platform.runtime_config.loaders_core import load_yaml_config
 
 
 def test_generate_template_writes_yaml_that_can_be_loaded(tmp_path: Path) -> None:

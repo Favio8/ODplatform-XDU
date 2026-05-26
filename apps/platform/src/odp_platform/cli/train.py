@@ -14,8 +14,8 @@ from typing import Sequence
 from odp_platform.common.constants import RUNTIME_TASK_TRAIN, SUPPORTED_TASKS
 from odp_platform.common.logging_utils import ROOT_LOGGER_NAME, get_logger, setup_logging
 from odp_platform.common.system_utils import log_device_info
-from odp_platform.config import ConfigBuildError, ConfigLoadError, build_config
-from odp_platform.config.base import ConfigTrace, RuntimeConfigBase
+from odp_platform.runtime_config import ConfigBuildError, ConfigLoadError, build_config
+from odp_platform.runtime_config.base import ConfigTrace, RuntimeConfigBase
 
 
 LOGGER_NAME = f"{ROOT_LOGGER_NAME}.cli.train"

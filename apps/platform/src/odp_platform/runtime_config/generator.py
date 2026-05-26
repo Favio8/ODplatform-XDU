@@ -13,10 +13,7 @@ import yaml
 from odp_platform.common.constants import SUPPORTED_RUNTIME_TASKS
 from odp_platform.common.logging_utils import get_logger, setup_logging
 from odp_platform.common.paths import runtime_config_path
-from odp_platform.config.base import RuntimeConfigBase
-from odp_platform.runtime_config.infer import YOLOInferConfig
-from odp_platform.runtime_config.train import YOLOTrainConfig
-from odp_platform.runtime_config.val import YOLOValConfig
+from odp_platform.runtime_config.base import RuntimeConfigBase, YOLOInferConfig, YOLOTrainConfig, YOLOValConfig
 
 
 LOGGER_NAME = __name__

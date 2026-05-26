@@ -1,4 +1,4 @@
-"""Teacher-style loader wrappers built on the current config subsystem."""
+"""Teacher-style loader wrappers built on the runtime_config subsystem."""
 
 from __future__ import annotations
 
@@ -13,7 +13,12 @@ from odp_platform.common.constants import (
     RUNTIME_TASK_VAL,
 )
 from odp_platform.common.paths import RUNTIME_CONFIGS_DIR
-from odp_platform.config.loaders import ConfigSourcePayload, load_cli_config, load_yaml_config
+from odp_platform.runtime_config.loaders_core import (
+    ConfigSourcePayload,
+    load_cli_config,
+    load_mapping_source,
+    load_yaml_config,
+)
 
 
 _TASK_BY_STEM = {
@@ -86,4 +91,12 @@ def load_all_sources(
     return {"yaml": yaml_values, "cli": cli_values}
 
 
-__all__ = ["CLILoader", "ConfigSourcePayload", "YAMLLoader", "load_all_sources"]
+__all__ = [
+    "CLILoader",
+    "ConfigSourcePayload",
+    "YAMLLoader",
+    "load_all_sources",
+    "load_cli_config",
+    "load_mapping_source",
+    "load_yaml_config",
+]

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from odp_platform.common.constants import SUPPORTED_TASKS, TASK_DETECT, TASK_SEGMENT
-from odp_platform.config.base import ConfigTrace, InferConfig, RuntimeConfigBase, TrainConfig, ValConfig
+from odp_platform.runtime_config.base import ConfigTrace, InferConfig, RuntimeConfigBase, TrainConfig, ValConfig
 
 
 @dataclass(frozen=True)

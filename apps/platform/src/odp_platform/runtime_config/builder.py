@@ -7,10 +7,22 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from odp_platform.common.constants import RUNTIME_TASK_INFER, RUNTIME_TASK_TRAIN, RUNTIME_TASK_VAL
-from odp_platform.config.base import ConfigTrace, InferConfig, RuntimeConfigBase, TrainConfig, ValConfig, get_config_class
-from odp_platform.config.loaders import ConfigSourcePayload, load_cli_config, load_mapping_source, load_yaml_config
-from odp_platform.config.merger import merge_sources
-from odp_platform.config.validator import ConfigBuildError, ConfigWarning, validate_config
+from odp_platform.runtime_config.base import (
+    ConfigTrace,
+    InferConfig,
+    RuntimeConfigBase,
+    TrainConfig,
+    ValConfig,
+    get_config_class,
+)
+from odp_platform.runtime_config.loaders_core import (
+    ConfigSourcePayload,
+    load_cli_config,
+    load_mapping_source,
+    load_yaml_config,
+)
+from odp_platform.runtime_config.merger_core import merge_sources
+from odp_platform.runtime_config.validator import ConfigBuildError, ConfigWarning, validate_config
 
 
 def _normalize_extra_sources(extra_sources: Sequence[ConfigSourcePayload] | None) -> list[ConfigSourcePayload]:

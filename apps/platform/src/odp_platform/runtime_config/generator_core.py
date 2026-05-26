@@ -13,7 +13,7 @@ import yaml
 from odp_platform.common.constants import SUPPORTED_RUNTIME_TASKS
 from odp_platform.common.logging_utils import get_logger, setup_logging
 from odp_platform.common.paths import runtime_config_path
-from odp_platform.config.base import RuntimeConfigBase, get_config_class
+from odp_platform.runtime_config.base import RuntimeConfigBase, get_config_class
 
 
 LOGGER_NAME = __name__

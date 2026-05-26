@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 from odp_platform.common.constants import RUNTIME_TASK_TRAIN
-from odp_platform.config import ConfigLoadError
-from odp_platform.config.loaders import load_cli_config, load_mapping_source, load_yaml_config
+from odp_platform.runtime_config import ConfigLoadError
+from odp_platform.runtime_config.loaders_core import load_cli_config, load_mapping_source, load_yaml_config
 
 
 def test_load_yaml_config_reads_flat_values(tmp_path: Path) -> None:
@@ -49,9 +49,9 @@ def test_load_yaml_config_missing_file_contains_template_hint(tmp_path: Path) ->
 def test_load_yaml_config_resolves_runtime_directory_by_task_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     runtime_dir = tmp_path / "runtime"
     runtime_dir.mkdir(parents=True)
-    monkeypatch.setattr("odp_platform.config.loaders.RUNTIME_CONFIGS_DIR", runtime_dir)
+    monkeypatch.setattr("odp_platform.runtime_config.loaders_core.RUNTIME_CONFIGS_DIR", runtime_dir)
     monkeypatch.setattr(
-        "odp_platform.config.loaders.runtime_config_path",
+        "odp_platform.runtime_config.loaders_core.runtime_config_path",
         lambda name: runtime_dir / f"{name}.yaml",
     )
     (runtime_dir / "train.yaml").write_text("epochs: 12\n", encoding="utf-8")

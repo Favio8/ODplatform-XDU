@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from odp_platform.common.constants import RUNTIME_TASK_INFER, RUNTIME_TASK_TRAIN, RUNTIME_TASK_VAL
-from odp_platform.config import (
+from odp_platform.runtime_config import (
     build_infer_config,
     build_config,
     build_train_config,

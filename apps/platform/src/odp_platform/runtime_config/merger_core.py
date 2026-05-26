@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
-from odp_platform.config.base import ConfigTrace, FieldTrace, RuntimeConfigBase, SourceOverride
+from odp_platform.runtime_config.base import ConfigTrace, FieldTrace, RuntimeConfigBase, SourceOverride
 
 
 def build_default_source(config_cls: type[RuntimeConfigBase]) -> dict[str, Any]:

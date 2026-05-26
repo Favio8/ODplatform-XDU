@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from odp_platform.config import load_mapping_source
-from odp_platform.config import TrainConfig
-from odp_platform.config.merger import merge_sources
+from odp_platform.runtime_config import load_mapping_source
+from odp_platform.runtime_config import TrainConfig
+from odp_platform.runtime_config.merger_core import merge_sources
 
 
 def test_merge_sources_applies_priority_and_trace() -> None:

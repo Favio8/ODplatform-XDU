@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from odp_platform.config import InferConfig, TrainConfig, ValConfig
-from odp_platform.config.merger import merge_sources
+from odp_platform.runtime_config import InferConfig, TrainConfig, ValConfig
+from odp_platform.runtime_config.merger_core import merge_sources
 
 
 def test_configs_have_metadata_and_defaults() -> None:

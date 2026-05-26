@@ -17,7 +17,7 @@ from odp_platform.common.constants import (
     RUNTIME_TASK_TRAIN,
     RUNTIME_TASK_VAL,
 )
-from odp_platform.config.base import RuntimeConfigBase, get_config_class
+from odp_platform.runtime_config.base import RuntimeConfigBase, get_config_class
 
 
 logger = get_logger(__name__)

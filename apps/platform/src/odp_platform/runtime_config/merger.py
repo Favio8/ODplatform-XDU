@@ -9,8 +9,8 @@ from typing import Any, Optional, TypeVar
 
 from pydantic import BaseModel
 
-from odp_platform.config.base import ConfigTrace, RuntimeConfigBase
-from odp_platform.config.merger import build_default_source
+from odp_platform.runtime_config.base import ConfigTrace, RuntimeConfigBase
+from odp_platform.runtime_config.merger_core import build_default_source
 
 
 T = TypeVar("T", bound=BaseModel)
