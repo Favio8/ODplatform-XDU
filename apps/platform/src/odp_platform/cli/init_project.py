@@ -7,7 +7,7 @@ from pathlib import Path
 
 from odp_platform.common.logging_utils import get_logger, setup_logging
 from odp_platform.common.performance_utils import time_it
-from odp_platform.common.paths import LOGGING_DIR, RAW_DATA_DIR, ROOT_DIR, get_dirs_to_initialize
+from odp_platform.common.paths import LOGGING_DIR, RAW_DATASETS_DIR, ROOT_DIR, get_dirs_to_initialize
 from odp_platform.common.string_utils import format_table_row, format_table_separator
 
 
@@ -17,39 +17,39 @@ logger = logging.getLogger(LOGGER_NAME)
 
 
 def _check_raw_data_status() -> list[str]:
-    """Inspect the shared raw dataset directory and return status messages."""
+    """Inspect the shared raw-dataset root and return status messages."""
 
     raw_status: list[str] = []
-    rel_raw = RAW_DATA_DIR.relative_to(ROOT_DIR)
+    rel_raw = RAW_DATASETS_DIR.relative_to(ROOT_DIR)
 
-    if not RAW_DATA_DIR.exists():
+    if not RAW_DATASETS_DIR.exists():
         logger.warning(
-            "原始数据目录不存在: %s\n请在该目录下放置原始 Pascal VOC 数据，例如 Annotations/、JPEGImages/ 等子目录。",
-            RAW_DATA_DIR,
+            "原始数据集根目录不存在: %s\n请按 data/raw/<dataset_name> 的结构放置原始数据，例如 data/raw/rsod。",
+            RAW_DATASETS_DIR,
         )
-        raw_status.append(f"{rel_raw} 不存在 -> 请放入原始数据集")
+        raw_status.append(f"{rel_raw} 不存在 -> 请按 data/raw/<dataset_name> 放入原始数据集")
         return raw_status
 
     entries = sorted(
-        (path for path in RAW_DATA_DIR.iterdir() if not path.name.startswith(".")),
+        (path for path in RAW_DATASETS_DIR.iterdir() if not path.name.startswith(".")),
         key=lambda path: path.name,
     )
     if not entries:
-        logger.warning("原始数据目录为空: %s", RAW_DATA_DIR)
-        raw_status.append(f"{rel_raw} 为空 -> 请放入原始数据集")
+        logger.warning("原始数据集根目录为空: %s", RAW_DATASETS_DIR)
+        raw_status.append(f"{rel_raw} 为空 -> 请创建至少一个 data/raw/<dataset_name> 子目录")
         return raw_status
 
     directories = [path for path in entries if path.is_dir()]
     files = [path for path in entries if path.is_file()]
     logger.info(
-        "原始数据目录就绪: %s 个子目录, %s 个文件",
+        "原始数据集根目录就绪: %s 个数据集目录, %s 个文件",
         len(directories),
         len(files),
     )
-    raw_status.append(f"{rel_raw} 就绪 -> {len(directories)} 个目录, {len(files)} 个文件")
+    raw_status.append(f"{rel_raw} 就绪 -> {len(directories)} 个数据集目录, {len(files)} 个文件")
 
     for path in directories:
-        raw_status.append(f"目录: {path.name}")
+        raw_status.append(f"数据集目录: {path.name}")
     for path in files:
         raw_status.append(f"文件: {path.name}")
     return raw_status
