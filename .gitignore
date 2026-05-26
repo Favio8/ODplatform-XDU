@@ -77,6 +77,7 @@ apps/platform/logging/
 apps/platform/configs/train.d5-demo.yaml
 apps/platform/src/odp_platform/data_pipeline-mentor/
 【学生成果物】*/
+docs/architecture/ADR-001-monorepo.md
 
 # 临时文件
 tmp/
