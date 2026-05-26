@@ -22,6 +22,12 @@ def _copy2(src: Path, dst: Path) -> None:
     shutil.copy2(_windows_long_path(src), _windows_long_path(dst))
 
 
+def _reset_dir(path: Path) -> None:
+    if path.exists():
+        shutil.rmtree(_windows_long_path(path))
+    path.mkdir(parents=True, exist_ok=True)
+
+
 def materialize_splits(
     split_map: Mapping[str, list[PreparedSample]],
     *,
@@ -35,8 +41,8 @@ def materialize_splits(
     for split_name, samples in split_map.items():
         image_dir = Path(image_dir_by_split[split_name])
         label_dir = Path(label_dir_by_split[split_name])
-        image_dir.mkdir(parents=True, exist_ok=True)
-        label_dir.mkdir(parents=True, exist_ok=True)
+        _reset_dir(image_dir)
+        _reset_dir(label_dir)
 
         materialized_samples: list[PreparedSample] = []
         for sample in samples:
