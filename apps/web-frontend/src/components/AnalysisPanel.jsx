@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import ScoreRing from "./ScoreRing";
 import RoomAccordion from "./RoomAccordion";
+import ReasoningSteps from "./ReasoningSteps";
+import ChatPanel from "./ChatPanel";
 
 const ratingColors = {
   "S": "from-amber-400 to-orange-500 text-amber-700",
@@ -16,7 +18,7 @@ const ratingColors = {
   "C": "from-zinc-400 to-zinc-500 text-zinc-600",
 };
 
-export default function AnalysisPanel({ analysis, yoloRooms }) {
+export default function AnalysisPanel({ analysis, yoloRooms, reasoningSteps, sessionId, sendMessage }) {
   const scores = analysis.scores || {};
   const rooms = analysis.rooms || [];
   const issues = analysis.core_issues || [];
@@ -207,6 +209,16 @@ export default function AnalysisPanel({ analysis, yoloRooms }) {
             </p>
           </div>
         </motion.div>
+      )}
+
+      {/* ---------- AI Reasoning ---------- */}
+      {reasoningSteps && reasoningSteps.length > 0 && (
+        <ReasoningSteps steps={reasoningSteps} isStreaming={false} />
+      )}
+
+      {/* ---------- Chat ---------- */}
+      {sessionId && sendMessage && (
+        <ChatPanel sessionId={sessionId} sendMessage={sendMessage} />
       )}
     </div>
   );

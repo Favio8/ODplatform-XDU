@@ -46,6 +46,9 @@ export default function App() {
               <AnalysisPanel
                 analysis={analysis.result.analysis}
                 yoloRooms={analysis.result.yolo_rooms}
+                reasoningSteps={analysis.reasoningSteps}
+                sessionId={analysis.sessionId}
+                sendMessage={analysis.sendMessage}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center">
