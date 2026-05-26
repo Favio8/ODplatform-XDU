@@ -1,0 +1,24 @@
+path: ../../../../data
+train: train/images
+val: val/images
+test: test/images
+nc: 2
+names:
+  0: room
+  1: Room
+odp_meta:
+  dataset: room_separation_3
+  source_format: coco
+  task: segment
+  created_at: '2026-05-22T17:22:00'
+  split:
+    train_rate: 0.8
+    val_rate: 0.1
+    test_rate: 0.1
+    random_state: 42
+    counts:
+      train: 326
+      val: 41
+      test: 41
+      total: 408
+  schema_version: 1

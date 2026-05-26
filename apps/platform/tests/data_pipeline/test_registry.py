@@ -1,5 +1,6 @@
 from odp_platform.common import constants
 from odp_platform.data_pipeline import ConvertOptions, get_converter, list_capabilities
+from odp_platform.data_pipeline.service import DataPipelineService
 
 
 def test_convert_options_defaults() -> None:
@@ -55,3 +56,19 @@ def test_list_capabilities_matches_expected() -> None:
 def test_get_converter_returns_pascal_voc_module() -> None:
     converter = get_converter(constants.FORMAT_PASCAL_VOC)
     assert converter.SUPPORTED_SOURCE_FORMAT == constants.FORMAT_PASCAL_VOC
+
+
+def test_service_rejects_unsupported_task() -> None:
+    service = DataPipelineService()
+    options = ConvertOptions(
+        dataset_name="demo",
+        source_format=constants.FORMAT_PASCAL_VOC,
+        task=constants.TASK_SEGMENT,
+    )
+
+    try:
+        service.convert(options, source_root="unused", output_labels_dir="unused")
+    except ValueError as exc:
+        assert "does not support task" in str(exc)
+    else:
+        raise AssertionError("unsupported format-task pair should raise")

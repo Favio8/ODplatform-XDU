@@ -38,6 +38,7 @@ PLATFORM_SRC_DIR: Final[Path] = PLATFORM_APP_DIR / "src"
 # apps/platform/configs/ - 平台配置文件
 PLATFORM_CONFIG_DIR: Final[Path] = PLATFORM_APP_DIR / "configs"
 CONFIGS_DIR: Final[Path] = PLATFORM_CONFIG_DIR
+RUNTIME_CONFIGS_DIR: Final[Path] = CONFIGS_DIR / "runtime"
 
 # apps/platform/logging/ - 日志配置和模板
 PLATFORM_LOGGING_DIR: Final[Path] = PLATFORM_APP_DIR / "logging"
@@ -147,6 +148,17 @@ def dataset_yaml_path(dataset_name: str) -> Path:
     return DATASET_CONFIGS_DIR / f"{normalized_name}.yaml"
 
 
+def runtime_config_path(name: str) -> Path:
+    """Return the canonical runtime-config yaml path for one task name."""
+
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError("name must not be empty")
+    if normalized_name.endswith(".yaml"):
+        normalized_name = normalized_name[:-5]
+    return RUNTIME_CONFIGS_DIR / f"{normalized_name}.yaml"
+
+
 def is_within_workspace(path: Path | str) -> bool:
     """Return whether a path resolves inside the current workspace."""
 
@@ -177,6 +189,7 @@ def get_dirs_to_initialize() -> list[Path]:
         UNIT_TEST_DIR,
         META_LOGGING_DIR,
         DATASET_CONFIGS_DIR,
+        RUNTIME_CONFIGS_DIR,
     ]
 
 
@@ -241,6 +254,7 @@ __all__ = [
     "PLATFORM_SRC_DIR",
     "CONFIGS_DIR",
     "PLATFORM_CONFIG_DIR",
+    "RUNTIME_CONFIGS_DIR",
     "PLATFORM_LOGGING_DIR",
     "LOGGING_DIR",
     "UNIT_TEST_DIR",
@@ -266,6 +280,7 @@ __all__ = [
     "DATASET_CONFIGS_DIR",
     "raw_dataset_root",
     "dataset_yaml_path",
+    "runtime_config_path",
     "find_workspace_root",
     "get_dirs_to_initialize",
     "get_dirs_to_reset",

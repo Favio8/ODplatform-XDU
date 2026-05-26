@@ -41,18 +41,21 @@ def test_common_workspace_path_constants() -> None:
     assert paths.RAW_DATASETS_DIR == paths.data_path("raw")
     assert paths.YOLO_DATASETS_DIR == paths.data_path("yolo")
     assert paths.DATASET_CONFIGS_DIR == paths.app_path("configs", "datasets")
+    assert paths.raw_dataset_root("rsod") == paths.data_path("raw", "rsod")
+    assert paths.dataset_yaml_path("rsod") == paths.app_path("configs", "datasets", "rsod.yaml")
     assert paths.MODELS_DIR == paths.workspace_path("models")
     assert paths.CONFIGS_DIR == paths.PLATFORM_CONFIG_DIR
     assert paths.PLATFORM_CONFIG_DIR == paths.app_path("configs")
-    assert paths.data_path("RSOD", "raw") == paths.DATA_DIR / "RSOD" / "raw"
-    assert paths.RAW_DATA_DIR == paths.data_path("RSOD", "raw")
+    assert paths.RAW_DATA_DIR == paths.data_path("raw")
+    assert paths.YOLO_DATA_DIR == paths.data_path("yolo")
     assert paths.TRAIN_DIR == paths.workspace_path("data", "train")
     assert paths.VAL_DIR == paths.workspace_path("data", "val")
     assert paths.TEST_DIR == paths.workspace_path("data", "test")
     assert paths.model_path("pretrained") == paths.MODELS_DIR / "pretrained"
     assert paths.run_path("demo") == paths.RUNS_DIR / "demo"
     assert paths.is_within_workspace(Path(paths.ROOT_DIR) / "apps")
-    assert paths.RAW_DATA_DIR in paths.get_dirs_to_initialize()
+    assert paths.RAW_DATASETS_DIR in paths.get_dirs_to_initialize()
+    assert paths.YOLO_DATASETS_DIR in paths.get_dirs_to_initialize()
     assert paths.META_LOGGING_DIR in paths.get_dirs_to_initialize()
     assert paths.DATASET_CONFIGS_DIR in paths.get_dirs_to_initialize()
     assert paths.RUNS_DIR in paths.get_dirs_to_reset()
@@ -65,6 +68,8 @@ def test_data_pipeline_constants() -> None:
     assert constants.SUPPORTED_TASKS == ("detect", "segment")
     assert constants.SUPPORTED_SPLITS == ("train", "val", "test")
     assert constants.SCHEMA_VERSION == 1
+    assert ".jpg" in constants.IMAGE_EXTENSIONS
+    assert constants.COVERAGE_SOFT_THRESHOLD > constants.DEFAULT_MIN_COVERAGE
 
 
 def test_convert_options_can_be_initialized_without_registry() -> None:

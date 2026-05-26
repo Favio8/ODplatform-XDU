@@ -42,8 +42,8 @@ DIRS = [
     "docs/teaching",
     "docs/api",
     "scripts",
-    "data/RSOD/raw",
-    "data/RSOD/yolo",
+    "data/raw",
+    "data/yolo",
     "models/pretrained",
     "models/checkpoints",
     "runs",
@@ -127,11 +127,11 @@ FILES = {
     runs/*
     !runs/.gitkeep
 
-    data/RSOD/raw/*
-    !data/RSOD/raw/.gitkeep
+    data/raw/*
+    !data/raw/.gitkeep
 
-    data/RSOD/yolo/*
-    !data/RSOD/yolo/.gitkeep
+    data/yolo/*
+    !data/yolo/.gitkeep
 
     models/pretrained/*
     !models/pretrained/.gitkeep
@@ -251,8 +251,8 @@ FILES = {
     experiment:
       name: rsod-train-example
     data:
-      source: data/RSOD/raw
-      target: data/RSOD/yolo
+      source: data/raw/rsod
+      target: data/yolo/rsod
     model:
       weights: models/pretrained/yolo11n.pt
     train:
@@ -263,7 +263,7 @@ FILES = {
     experiment:
       name: rsod-val-example
     data:
-      source: data/RSOD/yolo
+      source: data/yolo/rsod
     model:
       checkpoint: models/checkpoints/latest.pt
     validation:
@@ -273,7 +273,7 @@ FILES = {
     experiment:
       name: rsod-infer-example
     data:
-      source: data/RSOD/yolo
+      source: data/yolo/rsod
     model:
       checkpoint: models/checkpoints/latest.pt
     inference:
@@ -906,13 +906,13 @@ FILES = {
     "data/README.md": """
     # Data Layout
 
-    - `RSOD/raw`: source dataset in Pascal VOC format
-    - `RSOD/yolo`: converted YOLO-format dataset
+    - `raw/<dataset>`: source dataset root, for example `data/raw/rsod`
+    - `yolo/<dataset>`: intermediate YOLO-format labels when needed
 
     Keep large dataset files outside Git history.
     """,
-    "data/RSOD/raw/.gitkeep": "",
-    "data/RSOD/yolo/.gitkeep": "",
+    "data/raw/.gitkeep": "",
+    "data/yolo/.gitkeep": "",
     "models/pretrained/.gitkeep": "",
     "models/checkpoints/.gitkeep": "",
     "runs/.gitkeep": "",

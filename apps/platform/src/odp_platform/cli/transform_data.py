@@ -24,6 +24,11 @@ def _build_epilog() -> str:
     return "\n".join(lines)
 
 
+def _is_task_supported(source_format: str, task: str) -> bool:
+    capabilities = list_capabilities()
+    return task in capabilities.get(source_format, ())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Transform raw datasets into split YOLO training assets.",
@@ -62,6 +67,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     setup_logging(base_path=LOGGING_DIR, log_type="transform_data", temp_log=False)
     logger = get_logger(LOGGER_NAME)
+
+    if not _is_task_supported(args.source_format, args.task):
+        capabilities = list_capabilities()
+        supported_tasks = ", ".join(capabilities.get(args.source_format, ()))
+        logger.error(
+            "Dataset transform failed: source format %s does not support task %s; supported tasks: %s",
+            args.source_format,
+            args.task,
+            supported_tasks or "(none)",
+        )
+        return 1
 
     classes = None
     if args.classes:
