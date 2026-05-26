@@ -11,7 +11,7 @@ from typing import Any, Mapping
 import yaml
 
 from odp_platform.common.logging_utils import get_logger
-from odp_platform.common.paths import CONFIGS_DIR
+from odp_platform.common.paths import RUNTIME_CONFIGS_DIR, runtime_config_path
 from odp_platform.common.constants import (
     RUNTIME_TASK_INFER,
     RUNTIME_TASK_TRAIN,
@@ -46,13 +46,11 @@ def _resolve_yaml_path(config_path: str | Path, task_kind: str | None = None) ->
         return candidate
 
     if len(candidate.parts) == 1:
-        config_dir = CONFIGS_DIR
         if candidate.suffix:
-            return config_dir / candidate.name
-        if task_kind is not None:
-            basename = _TASK_FILE_BASENAMES[task_kind]
-            return config_dir / f"{candidate.name}.{basename}.yaml"
-        return config_dir / f"{candidate.name}.yaml"
+            return RUNTIME_CONFIGS_DIR / candidate.name
+        if task_kind is not None and candidate.name == _TASK_FILE_BASENAMES[task_kind]:
+            return runtime_config_path(candidate.name)
+        return runtime_config_path(candidate.name)
 
     return (Path.cwd() / candidate).resolve()
 
@@ -111,7 +109,7 @@ def load_yaml_config(
     config_cls = get_config_class(task_kind)
     resolved_path = _resolve_yaml_path(config_path, task_kind=task_kind)
     if not resolved_path.exists():
-        template_hint = f"odp-generate-config --task {task_kind} --output \"{resolved_path}\""
+        template_hint = f"odp-gen-config {task_kind}"
         raise ConfigLoadError(
             "Config file does not exist. "
             f"Expected path: {resolved_path}. "

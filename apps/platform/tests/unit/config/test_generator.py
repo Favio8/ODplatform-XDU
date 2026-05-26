@@ -12,6 +12,7 @@ def test_generate_template_writes_yaml_that_can_be_loaded(tmp_path: Path) -> Non
     generated = generate_template(RUNTIME_TASK_TRAIN, target)
 
     assert generated == target
+    assert "odp-gen-config" in generated.read_text(encoding="utf-8")
     payload = load_yaml_config(task_kind=RUNTIME_TASK_TRAIN, config_path=generated)
     assert payload.values["epochs"] == 100
 

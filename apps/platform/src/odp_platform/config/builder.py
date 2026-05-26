@@ -66,34 +66,34 @@ def build_config(
     return config, trace, warnings
 
 
-def build_train_config(**kwargs: Any) -> tuple[TrainConfig, ConfigTrace]:
+def build_train_config(*, yaml_path: str | None = "train.yaml", **kwargs: Any) -> tuple[TrainConfig, ConfigTrace]:
     """Build a validated train config plus full provenance trace."""
-    config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_TRAIN, **kwargs)
+    config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_TRAIN, yaml_path=yaml_path, **kwargs)
     return config, trace  # type: ignore[return-value]
 
 
-def build_val_config(**kwargs: Any) -> tuple[ValConfig, ConfigTrace]:
+def build_val_config(*, yaml_path: str | None = "val.yaml", **kwargs: Any) -> tuple[ValConfig, ConfigTrace]:
     """Build a validated validation config plus full provenance trace."""
-    config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_VAL, **kwargs)
+    config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_VAL, yaml_path=yaml_path, **kwargs)
     return config, trace  # type: ignore[return-value]
 
 
-def build_infer_config(**kwargs: Any) -> tuple[InferConfig, ConfigTrace]:
+def build_infer_config(*, yaml_path: str | None = "infer.yaml", **kwargs: Any) -> tuple[InferConfig, ConfigTrace]:
     """Build a validated inference config plus full provenance trace."""
-    config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_INFER, **kwargs)
+    config, trace, _warnings = build_config(task_kind=RUNTIME_TASK_INFER, yaml_path=yaml_path, **kwargs)
     return config, trace  # type: ignore[return-value]
 
 
-def preview_train_config(**kwargs: Any) -> tuple[dict[str, object], ConfigTrace]:
-    return preview_config(task_kind=RUNTIME_TASK_TRAIN, **kwargs)
+def preview_train_config(*, yaml_path: str | None = "train.yaml", **kwargs: Any) -> tuple[dict[str, object], ConfigTrace]:
+    return preview_config(task_kind=RUNTIME_TASK_TRAIN, yaml_path=yaml_path, **kwargs)
 
 
-def preview_val_config(**kwargs: Any) -> tuple[dict[str, object], ConfigTrace]:
-    return preview_config(task_kind=RUNTIME_TASK_VAL, **kwargs)
+def preview_val_config(*, yaml_path: str | None = "val.yaml", **kwargs: Any) -> tuple[dict[str, object], ConfigTrace]:
+    return preview_config(task_kind=RUNTIME_TASK_VAL, yaml_path=yaml_path, **kwargs)
 
 
-def preview_infer_config(**kwargs: Any) -> tuple[dict[str, object], ConfigTrace]:
-    return preview_config(task_kind=RUNTIME_TASK_INFER, **kwargs)
+def preview_infer_config(*, yaml_path: str | None = "infer.yaml", **kwargs: Any) -> tuple[dict[str, object], ConfigTrace]:
+    return preview_config(task_kind=RUNTIME_TASK_INFER, yaml_path=yaml_path, **kwargs)
 
 
 __all__ = [

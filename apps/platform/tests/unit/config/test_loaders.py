@@ -43,7 +43,21 @@ def test_load_yaml_config_missing_file_contains_template_hint(tmp_path: Path) ->
 
     message = str(exc_info.value)
     assert "Expected path" in message
-    assert "odp-generate-config" in message
+    assert "odp-gen-config" in message
+
+
+def test_load_yaml_config_resolves_runtime_directory_by_task_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir(parents=True)
+    monkeypatch.setattr("odp_platform.config.loaders.RUNTIME_CONFIGS_DIR", runtime_dir)
+    monkeypatch.setattr(
+        "odp_platform.config.loaders.runtime_config_path",
+        lambda name: runtime_dir / f"{name}.yaml",
+    )
+    (runtime_dir / "train.yaml").write_text("epochs: 12\n", encoding="utf-8")
+
+    payload = load_yaml_config(task_kind=RUNTIME_TASK_TRAIN, config_path="train")
+    assert payload.values["epochs"] == 12
 
 
 def test_load_cli_config_keeps_falsey_values() -> None:

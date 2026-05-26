@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
-from odp_platform.common.constants import SUPPORTED_TASKS, TASK_DETECT
-from odp_platform.config.base import ConfigTrace, RuntimeConfigBase, TrainConfig
+from odp_platform.common.constants import SUPPORTED_TASKS, TASK_DETECT, TASK_SEGMENT
+from odp_platform.config.base import ConfigTrace, InferConfig, RuntimeConfigBase, TrainConfig, ValConfig
 
 
 @dataclass(frozen=True)
@@ -68,6 +68,37 @@ def validate_config(
                 ConfigWarning(
                     field_name="batch",
                     message="batch=0 while cache=False is allowed, but auto-batch may be slow or unsupported downstream.",
+                )
+            )
+    elif isinstance(config, ValConfig):
+        if config.task_type != TASK_SEGMENT:
+            if config.mask_ratio != 4 or config.overlap_mask is not True:
+                warnings.append(
+                    ConfigWarning(
+                        field_name="mask_ratio",
+                        message="mask_ratio / overlap_mask are only meaningful for segment validation and will be ignored for non-segment tasks.",
+                    )
+                )
+    elif isinstance(config, InferConfig):
+        if config.save_conf and not config.save_txt:
+            warnings.append(
+                ConfigWarning(
+                    field_name="save_conf",
+                    message="save_conf=True has no effect unless save_txt=True.",
+                )
+            )
+        if config.stream_buffer and not config.stream:
+            warnings.append(
+                ConfigWarning(
+                    field_name="stream_buffer",
+                    message="stream_buffer=True has no effect unless stream=True.",
+                )
+            )
+        if config.retina_masks and config.task_type != TASK_SEGMENT:
+            warnings.append(
+                ConfigWarning(
+                    field_name="retina_masks",
+                    message="retina_masks only applies to segment inference and will be ignored for non-segment tasks.",
                 )
             )
 

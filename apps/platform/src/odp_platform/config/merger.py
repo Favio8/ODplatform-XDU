@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Any
 
 from odp_platform.config.base import ConfigTrace, FieldTrace, RuntimeConfigBase, SourceOverride
@@ -47,7 +48,8 @@ def merge_sources(
                 sensitive=config_cls.field_specs()[field_name].sensitive,
             )
             for field_name, history in history_by_field.items()
-        }
+        },
+        created_at=datetime.now().isoformat(timespec="seconds"),
     )
     return merged, trace
 

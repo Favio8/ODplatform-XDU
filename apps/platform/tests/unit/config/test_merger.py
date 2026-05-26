@@ -41,3 +41,24 @@ def test_merge_sources_supports_three_source_override_chain() -> None:
     assert merged["batch"] == 8
     assert trace.get("epochs").to_override_chain() == "epochs: 100(DEFAULT) <- 24(YAML) <- 36(PROFILE) <- 12(CLI)"
     assert trace.get("epochs").to_effective_line() == "epochs: 12  (来源: CLI)"
+
+
+def test_trace_reports_and_audit_log_are_available() -> None:
+    _merged, trace = merge_sources(
+        config_cls=TrainConfig,
+        ordered_sources=[
+            ("yaml", {"epochs": 24}),
+            ("cli", {"epochs": 12, "save": False}),
+        ],
+    )
+
+    source_report = trace.get_source_report()
+    conflict_report = trace.get_conflict_report()
+    audit_log = trace.to_audit_log()
+
+    assert "配置来源报告" in source_report
+    assert "[CLI]" in source_report
+    assert "配置覆盖报告" in conflict_report
+    assert "epochs: 100(DEFAULT) <- 24(YAML) <- 12(CLI)" in conflict_report
+    assert audit_log["fields_count_total"] >= 1
+    assert "CLI" in audit_log["fields_by_final_source"]

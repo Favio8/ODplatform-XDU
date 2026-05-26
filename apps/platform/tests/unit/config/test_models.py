@@ -14,6 +14,9 @@ def test_configs_have_metadata_and_defaults() -> None:
     assert infer.conf == 0.25
     assert "task_type" in TrainConfig.field_specs()
     assert "epochs" in TrainConfig.field_specs()
+    assert "batch" in TrainConfig.field_specs()
+    assert "imgsz" in TrainConfig.field_specs()
+    assert "save" in TrainConfig.field_specs()
 
 
 def test_to_ultralytics_kwargs_filters_internal_and_empty_values() -> None:
@@ -37,6 +40,29 @@ def test_snapshot_roundtrip_restores_config() -> None:
     assert restored == config
 
 
+def test_audit_snapshot_and_sensitive_mask_are_available() -> None:
+    config = InferConfig(model="weights.pt", source="demo.jpg")
+    snapshot = config.to_audit_snapshot()
+    restored = InferConfig.from_audit_snapshot(snapshot)
+
+    assert snapshot["_config_class"] == "InferConfig"
+    assert restored == config
+    assert config.mask_sensitive_dump()["model"] == "weights.pt"
+
+
+def test_base_config_teacher_style_metadata_reflection_is_available() -> None:
+    config = TrainConfig()
+
+    groups = config.get_field_groups()
+    metadata = config.get_field_metadata("batch")
+
+    assert "input" in groups
+    assert "batch" in groups["input"]
+    assert metadata["default"] == 16
+    assert metadata["group"] == "input"
+    assert isinstance(metadata["examples"], list)
+
+
 def test_trace_dict_and_human_views_are_stable() -> None:
     _merged, trace = merge_sources(
         config_cls=TrainConfig,
@@ -50,4 +76,5 @@ def test_trace_dict_and_human_views_are_stable() -> None:
     assert field_trace.final_source_label == "CLI"
     assert field_trace.to_effective_line() == "epochs: 24  (来源: CLI)"
     assert field_trace.to_human_readable() == "epochs: 100(DEFAULT) <- 12(YAML) <- 24(CLI)"
+    assert field_trace.chain_str() == "epochs: 100(DEFAULT) <- 12(YAML) <- 24(CLI)"
     assert field_trace.to_dict()["history"][0]["source_label"] == "DEFAULT"

@@ -13,6 +13,7 @@ from typing import Sequence
 
 from odp_platform.common.constants import RUNTIME_TASK_TRAIN, SUPPORTED_TASKS
 from odp_platform.common.logging_utils import ROOT_LOGGER_NAME, get_logger, setup_logging
+from odp_platform.common.system_utils import log_device_info
 from odp_platform.config import ConfigBuildError, ConfigLoadError, build_config
 from odp_platform.config.base import ConfigTrace, RuntimeConfigBase
 
@@ -54,19 +55,16 @@ def _log_config_info(logger: logging.Logger, config: RuntimeConfigBase, trace: C
     logger.info("开始记录模型参数信息".center(72, "="))
     for field_name in config.to_runtime_dict():
         field_trace = trace.get(field_name)
+        display_name = config.external_field_name(field_name)
         logger.info(
             "%-20s : %s  (来源: %s)",
-            field_name,
+            display_name,
             field_trace.final_value,
             field_trace.final_source_label,
         )
 
-    logger.info("配置覆盖情况".center(72, "-"))
-    for field_name in config.to_runtime_dict():
-        field_trace = trace.get(field_name)
-        if len(field_trace.history) <= 1:
-            continue
-        logger.info(field_trace.to_override_chain())
+    logger.info(trace.get_source_report())
+    logger.info(trace.get_conflict_report())
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -79,6 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         log_level=args.log_level,
     )
     logger = get_logger(LOGGER_NAME)
+    log_device_info(logger)
 
     try:
         config, trace, warnings = build_config(
