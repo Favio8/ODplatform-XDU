@@ -1,16 +1,15 @@
-path: ../../../../data
+path: D:\AAA_Favio_2026\AI_exploring\personal\ODplatform\data\processed\room_separation_3
 train: train/images
 val: val/images
 test: test/images
-nc: 2
+nc: 1
 names:
   0: room
-  1: Room
 odp_meta:
   dataset: room_separation_3
   source_format: coco
   task: segment
-  created_at: '2026-05-22T17:22:00'
+  created_at: '2026-05-26T14:13:42'
   split:
     train_rate: 0.8
     val_rate: 0.1

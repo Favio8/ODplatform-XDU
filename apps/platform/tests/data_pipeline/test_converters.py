@@ -161,6 +161,58 @@ def test_coco_converter_supports_roboflow_split_annotations(tmp_path: Path) -> N
     }
 
 
+def test_coco_converter_normalizes_class_names_to_lowercase(tmp_path: Path) -> None:
+    source_root = tmp_path / "roomwise_casefold"
+    images_dir = source_root / "images"
+    _write_image(images_dir / "sample_001.jpg", size=(100, 100))
+    _write_image(images_dir / "sample_002.jpg", size=(100, 100))
+
+    payload = {
+        "images": [
+            {"id": 1, "file_name": "sample_001.jpg", "width": 100, "height": 100},
+            {"id": 2, "file_name": "sample_002.jpg", "width": 100, "height": 100},
+        ],
+        "categories": [
+            {"id": 1, "name": "Room"},
+            {"id": 2, "name": "room"},
+        ],
+        "annotations": [
+            {
+                "id": 1,
+                "image_id": 1,
+                "category_id": 1,
+                "bbox": [10, 10, 50, 50],
+                "segmentation": [[10, 10, 60, 10, 60, 60, 10, 60]],
+            },
+            {
+                "id": 2,
+                "image_id": 2,
+                "category_id": 2,
+                "bbox": [20, 20, 40, 40],
+                "segmentation": [[20, 20, 60, 20, 60, 60, 20, 60]],
+            },
+        ],
+    }
+    source_root.mkdir(parents=True, exist_ok=True)
+    (source_root / "annotations.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    options = ConvertOptions(
+        dataset_name="roomwise_casefold",
+        source_format=FORMAT_COCO,
+        task=TASK_SEGMENT,
+    )
+    manifest = coco.convert(
+        options=options,
+        source_root=source_root,
+        output_labels_dir=tmp_path / "labels_casefold",
+    )
+
+    assert manifest.classes == ["room"]
+    assert len(manifest.samples) == 2
+    for sample in manifest.samples:
+        assert sample.class_names == ("room",)
+
+
 def test_yolo_converter_skips_invalid_txt_and_falls_back_to_copy(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

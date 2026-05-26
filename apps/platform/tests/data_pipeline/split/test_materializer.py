@@ -43,3 +43,36 @@ def test_materialize_splits_resets_existing_targets(tmp_path: Path) -> None:
     assert (image_dir / "sample.jpg").exists()
     assert (label_dir / "sample.txt").exists()
     assert result["train"][0].image_path == image_dir / "sample.jpg"
+
+
+def test_materialize_splits_renames_image_to_match_sample_stem(tmp_path: Path) -> None:
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    sample_image = src_dir / "origin.jpg"
+    sample_label = src_dir / "train_origin.txt"
+    sample_image.write_text("image", encoding="utf-8")
+    sample_label.write_text("0 0.5 0.5 0.5 0.5\n", encoding="utf-8")
+
+    image_dir = tmp_path / "data" / "train" / "images"
+    label_dir = tmp_path / "data" / "train" / "labels"
+
+    split_map = {
+        "train": [
+            PreparedSample(
+                stem="train_origin",
+                image_path=sample_image,
+                label_path=sample_label,
+                class_names=("target",),
+            )
+        ]
+    }
+
+    result = materialize_splits(
+        split_map,
+        image_dir_by_split={"train": image_dir},
+        label_dir_by_split={"train": label_dir},
+    )
+
+    assert (image_dir / "train_origin.jpg").exists()
+    assert (label_dir / "train_origin.txt").exists()
+    assert result["train"][0].image_path == image_dir / "train_origin.jpg"

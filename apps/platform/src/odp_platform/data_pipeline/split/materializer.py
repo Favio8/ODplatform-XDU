@@ -46,7 +46,7 @@ def materialize_splits(
 
         materialized_samples: list[PreparedSample] = []
         for sample in samples:
-            target_image = image_dir / sample.image_path.name
+            target_image = image_dir / f"{sample.stem}{sample.image_path.suffix}"
             target_label = label_dir / sample.label_path.name
             _copy2(sample.image_path, target_image)
             _copy2(sample.label_path, target_label)

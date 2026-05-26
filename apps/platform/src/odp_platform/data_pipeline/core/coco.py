@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 _ROBOFLOW_SPLITS: Final[tuple[str, ...]] = ("train", "valid", "val", "test")
 
 
+def _normalize_class_name(class_name: object) -> str:
+    return str(class_name).strip().lower()
+
+
 def _windows_long_path(path: Path) -> str:
     resolved = str(path.resolve())
     if os.name == "nt" and not resolved.startswith("\\\\?\\"):
@@ -275,7 +279,7 @@ def convert(
     else:
         classes = []
         for category in sorted(categories, key=lambda item: (str(item["name"]).lower(), int(item["id"]))):
-            class_name = str(category["name"])
+            class_name = _normalize_class_name(category["name"])
             if class_name not in classes:
                 classes.append(class_name)
 
@@ -290,7 +294,7 @@ def convert(
             images = payload.get("images", [])
             annotations = payload.get("annotations", [])
             category_id_to_name = {
-                int(category["id"]): str(category["name"])
+                int(category["id"]): _normalize_class_name(category["name"])
                 for category in payload.get("categories", [])
             }
 
