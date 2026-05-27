@@ -19,12 +19,17 @@ venv/
 env/
 .venv/
 ENV/
+.env
+.env.*
+!*.env.example
 
 # ============================================================
 # IDE / 编辑器
 # ============================================================
 .idea/
 .vscode/
+.claude/
+CLAUDE.md
 *.swp
 *~
 
@@ -74,8 +79,17 @@ runs/*
 !runs/README.md
 
 # 端私有日志(运行时产生,各机器不同)
+node_modules/
+.vite/
+# 根目录不承载 Node 工程；前端依赖锁定在 apps/web-frontend/
+/package.json
+/package-lock.json
+apps/web-frontend/node_modules/
+apps/web-frontend/dist/
+apps/web-frontend/*.tsbuildinfo
+apps/web-frontend/vite.config.d.ts
+apps/web-frontend/vite.config.js
 apps/platform/logging/
-*.log
 apps/platform/configs/train.d5-demo.yaml
 apps/platform/src/odp_platform/data_pipeline-mentor/
 【学生成果物】*/
