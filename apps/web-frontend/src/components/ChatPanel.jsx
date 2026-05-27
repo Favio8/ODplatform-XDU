@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -8,10 +8,19 @@ export default function ChatPanel({ sessionId, sendMessage }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const shouldScrollRef = useRef(false);
 
-  useEffect(() => {
+  const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, []);
+
+  // 只在用户发送消息后滚动，不随 mount / analysis 结果自动滚动
+  useEffect(() => {
+    if (shouldScrollRef.current) {
+      scrollToBottom();
+      shouldScrollRef.current = false;
+    }
+  }, [messages, scrollToBottom]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -19,15 +28,66 @@ export default function ChatPanel({ sessionId, sendMessage }) {
 
     setInput("");
     setMessages((m) => [...m, { role: "user", content: text }]);
+    shouldScrollRef.current = true;
     setLoading(true);
 
-    const result = await sendMessage(text);
+    try {
+      const form = new FormData();
+      form.append("message", text);
 
-    setMessages((m) => [
-      ...m,
-      { role: "assistant", content: result?.reply || "抱歉，请重试。" },
-    ]);
-    setLoading(false);
+      const res = await fetch(`/api/chat/${sessionId}/stream`, {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      // 流式读取 SSE
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let replyContent = "";
+
+      setMessages((m) => [...m, { role: "assistant", content: "" }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.token) {
+                replyContent += parsed.token;
+                setMessages((m) => {
+                  const updated = [...m];
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content: replyContent,
+                  };
+                  return updated;
+                });
+                shouldScrollRef.current = true;
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (err) {
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: `发送失败: ${err.message}` },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,7 +134,7 @@ export default function ChatPanel({ sessionId, sendMessage }) {
                   msg.content
                 ) : (
                   <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 prose-headings:my-2 prose-code:text-xs prose-code:bg-zinc-200 prose-code:px-1 prose-code:rounded">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    <ReactMarkdown>{msg.content || "..."}</ReactMarkdown>
                   </div>
                 )}
               </div>
@@ -82,7 +142,7 @@ export default function ChatPanel({ sessionId, sendMessage }) {
           ))}
         </AnimatePresence>
 
-        {loading && (
+        {loading && messages.length === 0 && (
           <div className="flex gap-2.5">
             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0">
               <Bot className="w-3 h-3 text-white" />

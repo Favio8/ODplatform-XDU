@@ -71,6 +71,9 @@ class Agent:
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
 
+    def _system_prompt(self):
+        return SYSTEM_PROMPT
+
     def analyze(self, image_base64: str, rooms: list, image_size: dict,
                 session_id: str = None, memory=None) -> dict:
         """两阶段 Agent 分析：

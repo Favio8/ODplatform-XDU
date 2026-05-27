@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 from pathlib import Path
@@ -5,7 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from agent import Agent
@@ -101,6 +102,70 @@ async def chat(session_id: str, message: str = Form(...)):
         "reply": result["reply"],
         "reasoning_steps": result["reasoning_steps"],
     }
+
+
+@app.post("/api/chat/{session_id}/stream")
+async def chat_stream(session_id: str, message: str = Form(...)):
+    """流式对话端点，SSE 逐 token 输出。"""
+
+    def generate():
+        sess = memory.get(session_id)
+        if not sess:
+            yield f"data: {json.dumps({'token': '会话已过期，请重新上传。'})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        # 构建对话上下文
+        messages = [{"role": "system", "content": agent._system_prompt()}]
+
+        if sess.get("analyses"):
+            last = sess["analyses"][-1]
+            ctx = (
+                f"之前分析：户型={last.get('house_type','未知')}，"
+                f"评级={last.get('rating','N/A')}，"
+                f"{len(sess['yolo_rooms'])}个房间。"
+            )
+            messages.append({"role": "user", "content": ctx})
+            messages.append({"role": "assistant", "content": "了解。请问想进一步了解什么？"})
+
+        messages.extend(sess.get("messages", [])[-6:])
+        messages.append({"role": "user", "content": message})
+
+        try:
+            stream = agent.client.chat.completions.create(
+                model=agent.model,
+                messages=messages,
+                max_completion_tokens=2048,
+                temperature=0.7,
+                stream=True,
+            )
+
+            full_reply = ""
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    token = delta.content
+                    full_reply += token
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+
+            # 保存到记忆
+            memory.add_message(session_id, "user", message)
+            memory.add_message(session_id, "assistant", full_reply)
+
+        except Exception as e:
+            yield f"data: {json.dumps({'token': f'[错误: {str(e)}]'})}\n\n"
+
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/session/{session_id}")
