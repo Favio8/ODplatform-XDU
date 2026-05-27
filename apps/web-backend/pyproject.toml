@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "odp-web-backend"
+version = "0.1.0"
+description = "ODPlatform web backend for floorplan segmentation and agent analysis."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "matplotlib>=3.9",
+  "numpy>=1.26",
+  "opencv-python>=4.10",
+  "openai>=1.50",
+  "pydantic>=2.7",
+  "python-dotenv>=1.0",
+  "python-multipart>=0.0.9",
+  "pyyaml>=6.0",
+  "ultralytics>=8.3",
+  "uvicorn>=0.30",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
