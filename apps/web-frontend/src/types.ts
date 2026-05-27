@@ -64,6 +64,24 @@ export interface AgentAdvice {
   priority: "high" | "medium" | "low";
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  status?: "streaming" | "done" | "error";
+}
+
+export interface RoomDisplayInfo {
+  id: number;
+  label: string;
+  semanticName: string;
+  displayName: string;
+  confidence: number;
+  areaRatio: number;
+  color: string;
+  note: string;
+  advice?: AgentAdvice;
+}
+
 export interface AgentReport {
   report_id: string;
   dataset: string;

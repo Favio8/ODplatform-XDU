@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import { analyzeFloorplan, fetchAgentSession, fetchOverview, fetchServingModels } from "../lib/api";
-import type { AgentReport, AgentRequirements, AgentYoloRoom, InferenceResult, ServingModel } from "../types";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { analyzeFloorplan, fetchAgentSession, fetchOverview, fetchServingModels, streamAgentChat } from "../lib/api";
+import type { AgentAdvice, AgentReport, AgentRequirements, AgentYoloRoom, ChatMessage, InferenceResult, RoomDisplayInfo, ServingModel } from "../types";
 
 type ViewMode = "upload" | "analyzing" | "result";
 
@@ -21,6 +21,195 @@ const ROOM_COLOR_VALUES = Object.entries(ROOM_COLORS)
   .filter(([key]) => key !== "default")
   .map(([, value]) => value);
 
+type AgentRoomRaw = Record<string, unknown>;
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function extractAgentRooms(analysis: Record<string, unknown> | null): AgentRoomRaw[] {
+  return Array.isArray(analysis?.rooms) ? analysis.rooms as AgentRoomRaw[] : [];
+}
+
+function getRoomNumericId(room: AgentRoomRaw): number | null {
+  const rawId = room.id ?? room.room_id ?? room.room_index;
+  if (typeof rawId === "number" && Number.isFinite(rawId)) return rawId;
+  if (typeof rawId === "string") {
+    const parsed = Number(rawId.replace(/[^\d.-]/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  const label = String(room.room_label ?? "");
+  const match = label.match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+function getRoomSemanticName(room: AgentRoomRaw | undefined, fallback: string): string {
+  if (!room) return fallback;
+  return String(room.room_type || room.room_label || room.name || fallback).trim() || fallback;
+}
+
+function flattenSuggestions(room: AgentRoomRaw | undefined): string {
+  if (!room) return "";
+  const suggestions = room.suggestions;
+  if (typeof suggestions === "string") return suggestions;
+  if (Array.isArray(suggestions)) return suggestions.map(String).join(" ");
+  if (typeof suggestions === "object" && suggestions) {
+    return Object.values(suggestions as Record<string, unknown>).map(String).join(" ");
+  }
+  return "";
+}
+
+function getRoomAdvice(room: AgentRoomRaw | undefined, semanticName: string): AgentAdvice | undefined {
+  if (!room) return undefined;
+  const analysis = String(room.analysis || "").trim();
+  const suggestions = flattenSuggestions(room).trim();
+  const description = [analysis, suggestions].filter(Boolean).join(" ");
+  if (!description) return undefined;
+  return {
+    title: semanticName,
+    description,
+    priority: "medium",
+  };
+}
+
+function findAgentRoomForYolo(agentRooms: AgentRoomRaw[], yoloRoom: AgentYoloRoom, index: number): AgentRoomRaw | undefined {
+  return agentRooms.find((room) => getRoomNumericId(room) === yoloRoom.id) ?? agentRooms[index];
+}
+
+function buildRoomDisplayInfos(rooms: AgentYoloRoom[], analysis: Record<string, unknown> | null): RoomDisplayInfo[] {
+  const agentRooms = extractAgentRooms(analysis);
+  return rooms.map((room, index) => {
+    const agentRoom = findAgentRoomForYolo(agentRooms, room, index);
+    const fallback = `Room ${room.id}`;
+    const semanticName = getRoomSemanticName(agentRoom, fallback);
+    const displayName = semanticName === fallback ? fallback : `${semanticName} · ${fallback}`;
+    const advice = getRoomAdvice(agentRoom, semanticName);
+    const confidenceText = `置信度 ${Math.round(room.confidence * 100)}%`;
+    const note = advice?.description
+      ? advice.description.slice(0, 80)
+      : `${confidenceText}，已进入空间分析。`;
+
+    return {
+      id: room.id,
+      label: fallback,
+      semanticName,
+      displayName,
+      confidence: room.confidence,
+      areaRatio: room.area_ratio,
+      color: ROOM_COLOR_VALUES[index % ROOM_COLOR_VALUES.length],
+      note,
+      advice,
+    };
+  });
+}
+
+function formatRequirementItems(requirements: AgentRequirements): Array<{ label: string; value: string }> {
+  return [
+    { label: "家庭人数", value: requirements.family_size || "未填写" },
+    { label: "宠物", value: requirements.has_pet ? (requirements.pet_type ? `有${requirements.pet_type}` : "有宠物") : "无宠物" },
+    { label: "预算", value: requirements.budget || "未填写" },
+    { label: "风格", value: requirements.style || "未填写" },
+    { label: "关注点", value: requirements.priorities.length ? requirements.priorities.join("、") : "未选择" },
+    { label: "备注", value: requirements.notes || "无" },
+  ];
+}
+
+function buildRequirementBasis(requirements: AgentRequirements): string {
+  const basis = [
+    requirements.budget ? `预算 ${requirements.budget}` : "",
+    requirements.style ? `${requirements.style} 风格` : "",
+    requirements.has_pet ? `${requirements.pet_type || "宠物"}友好` : "",
+    ...requirements.priorities,
+  ].filter(Boolean);
+  return basis.length ? basis.join("、") : "当前填写的居住需求";
+}
+
+function downloadHtmlReport(params: {
+  imageSrc: string | null;
+  imageName: string;
+  modelName: string;
+  requirements: AgentRequirements;
+  rooms: RoomDisplayInfo[];
+  agent: AgentReport | null;
+  chatMessages: ChatMessage[];
+}) {
+  const requirementRows = formatRequirementItems(params.requirements)
+    .map((item) => `<div class="pill"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></div>`)
+    .join("");
+  const roomRows = params.rooms.map((room) => `
+    <div class="room">
+      <div><strong>${escapeHtml(room.displayName)}</strong><p>${escapeHtml(room.note)}</p></div>
+      <span>${Math.round(room.areaRatio * 100)}%</span>
+    </div>
+  `).join("");
+  const adviceRows = (params.agent?.advice ?? []).map((item) => `
+    <section class="section">
+      <h3>${escapeHtml(item.title)}</h3>
+      <p>${escapeHtml(item.description)}</p>
+    </section>
+  `).join("");
+  const chatRows = params.chatMessages
+    .filter((message) => message.content.trim())
+    .map((message) => `<p><strong>${message.role === "user" ? "我" : "RoomWise Agent"}：</strong>${escapeHtml(message.content)}</p>`)
+    .join("");
+
+  const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>RoomWise 户型分析报告</title>
+  <style>
+    :root { --paper:#F8F3EB; --card:#FFFDF8; --ink:#2F2924; --muted:#7B7068; --line:#E7D9C7; --terra:#B86F55; --sage:#70866C; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px; color: var(--ink); background: var(--paper); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    header { margin-bottom: 24px; }
+    h1 { margin: 0 0 8px; font-size: 30px; }
+    .meta { color: var(--muted); font-size: 13px; }
+    .card, .section { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 22px; box-shadow: 0 14px 40px rgba(88, 65, 44, .08); margin-bottom: 18px; }
+    img { width: 100%; max-height: 520px; object-fit: contain; border-radius: 18px; background: #EFE4D5; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .pill { border: 1px solid var(--line); background: #FBF6EE; border-radius: 16px; padding: 12px; display: flex; justify-content: space-between; gap: 16px; }
+    .pill span, p { color: var(--muted); line-height: 1.7; }
+    .room { border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; justify-content: space-between; gap: 16px; margin-bottom: 10px; background: #FBF6EE; }
+    .room span { color: var(--terra); font-weight: 700; }
+    h2, h3 { margin: 0 0 10px; }
+    @media print { body { background: #fff; padding: 0; } .card, .section { box-shadow: none; break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>RoomWise 户型分析报告</h1>
+      <div class="meta">${escapeHtml(params.imageName)} · ${escapeHtml(params.modelName || "未记录模型")} · ${new Date().toLocaleString()}</div>
+    </header>
+    ${params.imageSrc ? `<div class="card"><img src="${params.imageSrc}" alt="分割结果" /></div>` : ""}
+    <section class="card"><h2>本次需求</h2><div class="grid">${requirementRows}</div></section>
+    <section class="card"><h2>空间识别</h2>${roomRows || "<p>暂无空间识别结果。</p>"}</section>
+    <section class="card"><h2>Agent 总结</h2><p>${escapeHtml(params.agent?.summary || "暂无总结。")}</p></section>
+    ${adviceRows || `<section class="section"><h3>装修建议</h3><p>暂无建议。</p></section>`}
+    <section class="card"><h2>空间优化</h2><p>${escapeHtml(params.agent?.circulation || "暂无空间优化建议。")}</p></section>
+    <section class="card"><h2>继续沟通摘要</h2>${chatRows || "<p>暂无继续沟通记录。</p>"}</section>
+  </main>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `roomwise-report-${Date.now()}.html`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 function RoomRegion({ name, color, area_ratio, note }: { name: string; color?: string; area_ratio: number; note?: string }) {
   const bg = color || ROOM_COLORS[name] || ROOM_COLORS["default"];
   return (
@@ -37,9 +226,29 @@ function RoomRegion({ name, color, area_ratio, note }: { name: string; color?: s
   );
 }
 
-function AdviceCard({ title, description, priority, index }: { title: string; description: string; priority: string; index: number }) {
+function AdviceCard({
+  title,
+  description,
+  priority,
+  index,
+  active = false,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  priority: string;
+  index: number;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <div className="flex gap-4 p-5 rounded-xl border border-[var(--border)] bg-[var(--warm-white)] hover:shadow-[var(--shadow-sm)] transition-all">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left flex gap-4 p-5 rounded-xl border bg-[var(--warm-white)] hover:shadow-[var(--shadow-sm)] transition-all ${
+        active ? "border-[var(--terracotta-light)] ring-1 ring-[var(--terracotta-light)] bg-[var(--terracotta-pale)]" : "border-[var(--border)]"
+      }`}
+    >
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--parchment)] flex items-center justify-center text-sm font-semibold text-[var(--warm-gray)]">
         {index + 1}
       </div>
@@ -55,7 +264,7 @@ function AdviceCard({ title, description, priority, index }: { title: string; de
         </div>
         <p className="text-xs text-[var(--warm-gray)] leading-relaxed">{description}</p>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -79,7 +288,7 @@ function toInferenceResult(file: File, rooms: AgentYoloRoom[], visualization: st
       area_ratio: room.area_ratio,
       note: `置信度 ${Math.round(room.confidence * 100)}%，已进入 Agent 空间分析。`,
     })),
-    summary: `YOLO 已识别 ${rooms.length} 个空间区域，正在生成装修建议。`,
+    summary: `YOLO 已识别 ${rooms.length} 个空间区域，分割结果已进入 Agent 分析流程。`,
   };
 }
 
@@ -211,6 +420,109 @@ function RequirementForm({
   );
 }
 
+function RequirementSummaryCard({ requirements }: { requirements: AgentRequirements }) {
+  return (
+    <div className="card p-6">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-lg font-bold text-[var(--charcoal)]" style={{ fontFamily: "var(--font-display)" }}>本次需求摘要</h2>
+          <p className="text-xs text-[var(--mid-gray)] mt-0.5">Agent 建议会围绕这些居住条件展开。</p>
+        </div>
+        <span className="px-3 py-1 rounded-full bg-[var(--sage-pale)] text-[var(--sage)] text-xs border border-[var(--sage-light)]">
+          {buildRequirementBasis(requirements)}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {formatRequirementItems(requirements).map((item) => (
+          <div key={item.label} className="rounded-xl border border-[var(--border)] bg-[var(--ivory)] px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wider text-[var(--light-gray)] mb-1">{item.label}</p>
+            <p className="text-sm font-semibold text-[var(--charcoal)] line-clamp-2">{item.value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChatPanel({
+  disabled,
+  messages,
+  input,
+  streaming,
+  onInput,
+  onSend,
+}: {
+  disabled: boolean;
+  messages: ChatMessage[];
+  input: string;
+  streaming: boolean;
+  onInput: (value: string) => void;
+  onSend: () => void;
+}) {
+  return (
+    <div className="card p-6">
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h2 className="text-lg font-bold text-[var(--charcoal)]" style={{ fontFamily: "var(--font-display)" }}>继续沟通改造想法</h2>
+          <p className="text-xs text-[var(--mid-gray)] mt-0.5">可以继续追问预算、房间改造、宠物收纳或动线细节。</p>
+        </div>
+        <span className="px-3 py-1 rounded-full bg-[var(--ivory)] text-[var(--warm-gray)] text-xs border border-[var(--border)]">
+          流式对话
+        </span>
+      </div>
+
+      <div className="space-y-3 mb-4 max-h-72 overflow-y-auto pr-1">
+        {messages.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--ivory)] p-5 text-sm text-[var(--mid-gray)]">
+            试试追问：“如果预算降到10万以内怎么办？”、“主卧能不能改大？”、“我家有猫怎么做收纳？”
+          </div>
+        )}
+        {messages.map((message, index) => (
+          <div
+            key={`${message.role}-${index}`}
+            className={`rounded-2xl px-4 py-3 text-sm leading-relaxed border ${
+              message.role === "user"
+                ? "ml-8 bg-[var(--terracotta-pale)] border-[var(--terracotta-light)] text-[var(--charcoal)]"
+                : "mr-8 bg-[var(--ivory)] border-[var(--border)] text-[var(--warm-gray)]"
+            }`}
+          >
+            <div className="text-[10px] uppercase tracking-wider mb-1 text-[var(--light-gray)]">
+              {message.role === "user" ? "我的追问" : "RoomWise Agent"}
+              {message.status === "streaming" ? " · 正在生成" : ""}
+              {message.status === "error" ? " · 失败" : ""}
+            </div>
+            {message.content || "正在组织回答..."}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-3">
+        <input
+          value={input}
+          onChange={(event) => onInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              onSend();
+            }
+          }}
+          disabled={disabled || streaming}
+          placeholder={disabled ? "请重新上传户型图后继续沟通" : "输入你的新想法，例如：预算降到10万以内怎么调整？"}
+          className="flex-1 px-4 py-3 rounded-xl border border-[var(--border)] bg-[var(--warm-white)] text-sm text-[var(--charcoal)] disabled:opacity-50 focus:outline-none focus:border-[var(--terracotta)] transition-all"
+        />
+        <button
+          type="button"
+          onClick={onSend}
+          disabled={disabled || streaming || !input.trim()}
+          className="px-5 py-3 rounded-xl bg-[var(--terracotta)] text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-[var(--shadow-sm)] transition-all"
+        >
+          {streaming ? "生成中" : "发送"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function toAgentReport(analysis: Record<string, unknown> | null | undefined): AgentReport {
   const rooms = Array.isArray(analysis?.rooms) ? analysis.rooms as Array<Record<string, unknown>> : [];
   const pros = Array.isArray(analysis?.pros) ? analysis.pros.map(String) : [];
@@ -261,8 +573,10 @@ export function Analysis() {
   const [view, setView] = useState<ViewMode>("result");
   const [inference, setInference] = useState<InferenceResult | null>(null);
   const [agent, setAgent] = useState<AgentReport | null>(null);
+  const [agentAnalysis, setAgentAnalysis] = useState<Record<string, unknown> | null>(null);
   const [agentStatus, setAgentStatus] = useState<"idle" | "analyzing" | "done" | "error">("idle");
   const [agentError, setAgentError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState("");
   const [servingModels, setServingModels] = useState<ServingModel[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [usedModelName, setUsedModelName] = useState("");
@@ -273,6 +587,9 @@ export function Analysis() {
   const [yoloRooms, setYoloRooms] = useState<AgentYoloRoom[]>([]);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatStreaming, setChatStreaming] = useState(false);
   const [requirements, setRequirements] = useState<AgentRequirements>({
     family_size: "三口之家",
     has_pet: false,
@@ -321,12 +638,17 @@ export function Analysis() {
     setUploadPreview(url);
     setInference(null);
     setAgent(null);
+    setAgentAnalysis(null);
     setAgentError(null);
     setAgentStatus("idle");
+    setSessionId("");
     setUsedModelName("");
     setYoloRooms([]);
     setImageSize(null);
     setSelectedRoomId(null);
+    setChatMessages([]);
+    setChatInput("");
+    setChatStreaming(false);
     setView("analyzing");
     setUploadingProgress(0);
 
@@ -336,6 +658,7 @@ export function Analysis() {
 
     try {
       const yolo = await analyzeFloorplan(file, requirements, selectedModel);
+      setSessionId(yolo.session_id);
       setUsedModelName(yolo.model?.name ?? selectedModel);
       setInference(toInferenceResult(file, yolo.yolo_rooms, yolo.visualization));
       setYoloRooms(yolo.yolo_rooms);
@@ -351,6 +674,7 @@ export function Analysis() {
         const session = await fetchAgentSession(yolo.session_id);
         if (session.status === "done" && session.analysis) {
           setAgent(toAgentReport(session.analysis));
+          setAgentAnalysis(session.analysis);
           setInference(toInferenceResult(file, session.yolo_rooms, session.visualization));
           setYoloRooms(session.yolo_rooms);
           setImageSize(session.image_size);
@@ -390,6 +714,84 @@ export function Analysis() {
     const file = e.target.files?.[0];
     if (file) handleFile(file);
   }, [handleFile]);
+
+  const roomDisplayInfos = useMemo(
+    () => buildRoomDisplayInfos(yoloRooms, agentAnalysis),
+    [agentAnalysis, yoloRooms]
+  );
+
+  const selectedRoom = useMemo(
+    () => roomDisplayInfos.find((room) => room.id === selectedRoomId) ?? roomDisplayInfos[0],
+    [roomDisplayInfos, selectedRoomId]
+  );
+
+  const selectedAdviceTitle = selectedRoom?.advice?.title ?? selectedRoom?.semanticName;
+
+  const handleAdviceClick = useCallback((title: string) => {
+    const matchedRoom = roomDisplayInfos.find((room) => title.includes(room.semanticName) || title.includes(room.label));
+    if (matchedRoom) setSelectedRoomId(matchedRoom.id);
+  }, [roomDisplayInfos]);
+
+  const handleSendChat = useCallback(async () => {
+    const message = chatInput.trim();
+    if (!message || !sessionId || chatStreaming) return;
+
+    setChatInput("");
+    setChatStreaming(true);
+    setChatMessages((prev) => [
+      ...prev,
+      { role: "user", content: message, status: "done" },
+      { role: "assistant", content: "", status: "streaming" },
+    ]);
+
+    try {
+      await streamAgentChat(sessionId, message, (token) => {
+        setChatMessages((prev) => {
+          const next = [...prev];
+          const index = next.length - 1;
+          if (index >= 0 && next[index].role === "assistant") {
+            next[index] = { ...next[index], content: next[index].content + token };
+          }
+          return next;
+        });
+      });
+      setChatMessages((prev) => {
+        const next = [...prev];
+        const index = next.length - 1;
+        if (index >= 0 && next[index].role === "assistant") {
+          next[index] = { ...next[index], status: "done" };
+        }
+        return next;
+      });
+    } catch (error) {
+      setChatMessages((prev) => {
+        const next = [...prev];
+        const index = next.length - 1;
+        if (index >= 0 && next[index].role === "assistant") {
+          next[index] = {
+            ...next[index],
+            status: "error",
+            content: next[index].content || (error instanceof Error ? error.message : "对话失败，请重新上传户型图后再试。"),
+          };
+        }
+        return next;
+      });
+    } finally {
+      setChatStreaming(false);
+    }
+  }, [chatInput, chatStreaming, sessionId]);
+
+  const handleExportReport = useCallback(() => {
+    downloadHtmlReport({
+      imageSrc: uploadPreview,
+      imageName: inference?.image_name || uploadedFile?.name || "户型图分析",
+      modelName: usedModelName || selectedModel,
+      requirements,
+      rooms: roomDisplayInfos,
+      agent,
+      chatMessages,
+    });
+  }, [agent, chatMessages, inference?.image_name, requirements, roomDisplayInfos, selectedModel, uploadPreview, uploadedFile?.name, usedModelName]);
 
   if (loading) {
     return (
@@ -474,6 +876,20 @@ export function Analysis() {
       {/* Results */}
       {view === "result" && (
         <div className="space-y-10 animate-fade-up">
+          <div className="flex flex-col md:flex-row md:items-stretch gap-3 justify-between">
+            <div className="flex-1">
+              <RequirementSummaryCard requirements={requirements} />
+            </div>
+            <button
+              type="button"
+              onClick={handleExportReport}
+              className="md:self-stretch inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border border-[var(--border)] bg-[var(--warm-white)] text-[var(--warm-gray)] hover:text-[var(--terracotta)] hover:border-[var(--terracotta-light)] hover:shadow-[var(--shadow-sm)] transition-all text-sm font-semibold"
+            >
+              <i className="fa-solid fa-file-export" />
+              导出 HTML 报告
+            </button>
+          </div>
+
           {/* Floor plan visualization + room list */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Floor plan viz */}
@@ -510,7 +926,8 @@ export function Analysis() {
                       >
                         {yoloRooms.map((room, index) => {
                           const active = selectedRoomId === room.id;
-                          const color = ROOM_COLOR_VALUES[index % ROOM_COLOR_VALUES.length];
+                          const display = roomDisplayInfos.find((item) => item.id === room.id);
+                          const color = display?.color ?? ROOM_COLOR_VALUES[index % ROOM_COLOR_VALUES.length];
                           const points = room.polygon?.map((point) => point.join(",")).join(" ");
                           const bbox = room.bbox;
                           return (
@@ -541,7 +958,7 @@ export function Analysis() {
                                 fontSize={active ? 22 : 18}
                                 fontWeight="700"
                               >
-                                Room {room.id}
+                                {display?.semanticName ?? `Room ${room.id}`}
                               </text>
                             </g>
                           );
@@ -605,31 +1022,35 @@ export function Analysis() {
               <div className="card p-6 h-full flex flex-col">
                 <h2 className="text-lg font-bold text-[var(--charcoal)] mb-5" style={{ fontFamily: "var(--font-display)" }}>空间明细</h2>
                 <div className="flex-1 space-y-2 overflow-y-auto">
-                  {(inference?.regions ?? []).map((region) => (
+                  {roomDisplayInfos.length > 0 ? roomDisplayInfos.map((region) => (
                     <button
-                      key={region.name}
-                      onClick={() => {
-                        const id = Number(region.name.replace("Room ", ""));
-                        if (!Number.isNaN(id)) setSelectedRoomId(id);
-                      }}
+                      key={region.id}
+                      onClick={() => setSelectedRoomId(region.id)}
                       className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${
-                        selectedRoomId === Number(region.name.replace("Room ", ""))
+                        selectedRoomId === region.id
                           ? "bg-[var(--terracotta-pale)] ring-1 ring-[var(--terracotta-light)]"
                           : "bg-[var(--ivory)] hover:bg-[var(--parchment)]"
                       }`}
                     >
                       <div
                         className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ background: region.color || ROOM_COLORS[region.name] || "var(--mid-gray)" }}
+                        style={{ background: region.color || "var(--mid-gray)" }}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[var(--charcoal)]">{region.name}</p>
-                        {region.note && <p className="text-[10px] text-[var(--mid-gray)] mt-0.5 truncate">{region.note}</p>}
+                        <p className="text-sm font-medium text-[var(--charcoal)]">{region.displayName}</p>
+                        <p className="text-[10px] text-[var(--mid-gray)] mt-0.5 truncate">
+                          {region.note}
+                        </p>
+                        <p className="text-[10px] text-[var(--light-gray)] mt-0.5">
+                          置信度 {Math.round(region.confidence * 100)}%
+                        </p>
                       </div>
-                      <div className="text-sm font-semibold text-[var(--charcoal)] flex-shrink-0">{Math.round(region.area_ratio * 100)}%</div>
+                      <div className="text-sm font-semibold text-[var(--charcoal)] flex-shrink-0">{Math.round(region.areaRatio * 100)}%</div>
                     </button>
+                  )) : (inference?.regions ?? []).map((region) => (
+                    <RoomRegion key={region.name} {...region} />
                   ))}
-                  {(!inference?.regions || inference.regions.length === 0) && (
+                  {roomDisplayInfos.length === 0 && (!inference?.regions || inference.regions.length === 0) && (
                     <div className="text-center py-8 text-[var(--mid-gray)] text-xs">
                       <i className="fa-solid fa-map text-2xl mb-2 block text-[var(--light-gray)]" />
                       暂无空间数据
@@ -645,7 +1066,7 @@ export function Analysis() {
             <div className="flex items-center gap-3 mb-5">
               <div>
                 <h2 className="text-lg font-bold text-[var(--charcoal)]" style={{ fontFamily: "var(--font-display)" }}>装修建议</h2>
-                <p className="text-xs text-[var(--mid-gray)] mt-0.5">基于空间结构的专业改造方案</p>
+                <p className="text-xs text-[var(--mid-gray)] mt-0.5">基于 {buildRequirementBasis(requirements)} 生成的专业改造方案</p>
               </div>
               <div className="ml-auto flex items-center gap-2 text-xs text-[var(--mid-gray)]">
                 <i className="fa-solid fa-robot text-[var(--sage)]" />
@@ -653,10 +1074,27 @@ export function Analysis() {
               </div>
             </div>
 
+            {selectedRoom?.advice && (
+              <div className="mb-4 rounded-2xl border border-[var(--terracotta-light)] bg-[var(--terracotta-pale)] p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: selectedRoom.color }} />
+                  <h3 className="text-sm font-semibold text-[var(--charcoal)]">{selectedRoom.displayName}</h3>
+                  <span className="text-xs text-[var(--terracotta)]">当前高亮空间</span>
+                </div>
+                <p className="text-xs text-[var(--warm-gray)] leading-relaxed">{selectedRoom.advice.description}</p>
+              </div>
+            )}
+
             {(agent?.advice ?? []).length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {agent!.advice.map((item, i) => (
-                  <AdviceCard key={item.title} {...item} index={i} />
+                  <AdviceCard
+                    key={`${item.title}-${i}`}
+                    {...item}
+                    index={i}
+                    active={Boolean(selectedAdviceTitle && item.title.includes(selectedAdviceTitle))}
+                    onClick={() => handleAdviceClick(item.title)}
+                  />
                 ))}
               </div>
             ) : agentStatus === "analyzing" ? (
@@ -721,10 +1159,27 @@ export function Analysis() {
             </div>
           )}
 
+          <ChatPanel
+            disabled={!sessionId || agentStatus === "analyzing"}
+            messages={chatMessages}
+            input={chatInput}
+            streaming={chatStreaming}
+            onInput={setChatInput}
+            onSend={handleSendChat}
+          />
+
           {/* CTA to upload new */}
           <div className="text-center">
             <button
-              onClick={() => { setView("upload"); setUploadedFile(null); setUploadPreview(null); }}
+              onClick={() => {
+                setView("upload");
+                setUploadedFile(null);
+                setUploadPreview(null);
+                setSessionId("");
+                setChatMessages([]);
+                setChatInput("");
+                setAgentAnalysis(null);
+              }}
               className="inline-flex items-center gap-2 px-6 py-3 border border-[var(--border)] hover:border-[var(--terracotta)] text-[var(--warm-gray)] hover:text-[var(--terracotta)] rounded-xl text-sm font-medium transition-all"
             >
               <i className="fa-solid fa-repeat" />

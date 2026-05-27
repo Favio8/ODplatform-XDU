@@ -203,6 +203,53 @@ export async function fetchAgentSession(sessionId: string): Promise<AgentSession
   return apiFetch<AgentSessionResponse>(`/session/${sessionId}`);
 }
 
+export async function sendAgentChat(sessionId: string, message: string): Promise<{ response: string }> {
+  const form = new FormData();
+  form.append("message", message);
+  return apiFetch<{ response: string }>(`/chat/${sessionId}`, { method: "POST", body: form });
+}
+
+export async function streamAgentChat(
+  sessionId: string,
+  message: string,
+  onToken: (token: string) => void
+): Promise<void> {
+  const form = new FormData();
+  form.append("message", message);
+  const res = await fetch(`${API_BASE}/chat/${sessionId}/stream`, { method: "POST", body: form });
+  if (!res.ok) {
+    throw new Error(`/chat/${sessionId}/stream returned ${res.status}`);
+  }
+  if (!res.body) {
+    throw new Error("当前浏览器不支持流式读取。");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data) continue;
+      if (data === "[DONE]") return;
+      try {
+        const payload = JSON.parse(data) as { token?: string };
+        if (payload.token) onToken(payload.token);
+      } catch {
+        onToken(data);
+      }
+    }
+  }
+}
+
 export async function fetchFloorplans(): Promise<FloorplanRecord[]> {
   const data = await apiFetch<{ items: FloorplanRecord[] }>("/floorplans");
   return data.items;
