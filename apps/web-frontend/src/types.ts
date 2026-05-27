@@ -108,7 +108,21 @@ export interface AgentAnalyzeResponse {
   visualization: string;
   yolo_rooms: AgentYoloRoom[];
   requirements?: Partial<AgentRequirements>;
+  model?: {
+    name: string;
+    path: string;
+    label?: string;
+  };
   status: string;
+}
+
+export interface ServingModel {
+  name: string;
+  path: string;
+  size_bytes: number;
+  updated_at: string;
+  is_default: boolean;
+  label: string;
 }
 
 export interface FloorplanRecord {

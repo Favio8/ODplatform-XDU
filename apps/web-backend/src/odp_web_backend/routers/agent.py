@@ -17,7 +17,11 @@ def get_latest_report() -> dict:
 
 
 @router.post("/analyze")
-async def analyze(file: UploadFile = File(...), requirements: str = Form("{}")) -> dict:
+async def analyze(
+    file: UploadFile = File(...),
+    requirements: str = Form("{}"),
+    model_name: str | None = Form(None),
+) -> dict:
     image_bytes = await file.read()
     try:
         parsed_requirements = json.loads(requirements) if requirements else {}
@@ -27,6 +31,7 @@ async def analyze(file: UploadFile = File(...), requirements: str = Form("{}")) 
         image_bytes,
         filename=file.filename or "floorplan.jpg",
         requirements=parsed_requirements if isinstance(parsed_requirements, dict) else {},
+        model_name=model_name,
     )
 
 

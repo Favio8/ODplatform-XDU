@@ -71,8 +71,10 @@ data/test/
 models/pretrained/*.pt
 models/checkpoints/*.pt
 models/checkpoints/*/
+models/serving/*.pt
 !models/pretrained/README.md
 !models/checkpoints/README.md
+!models/serving/README.md
 
 # 训练运行结果(每次自动产生新目录)
 runs/*

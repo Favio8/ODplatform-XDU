@@ -17,6 +17,7 @@ import type {
   TrainingCurvePoint,
   TransformJobCreate,
   DatasetUploadResult,
+  ServingModel,
 } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000/api";
@@ -121,6 +122,11 @@ export async function fetchEvaluationReport(reportId: string): Promise<Evaluatio
   return apiFetch<EvaluationReportDetail>(`/evaluation/reports/${reportId}`);
 }
 
+export async function fetchServingModels(): Promise<ServingModel[]> {
+  const data = await apiFetch<{ items: ServingModel[] }>("/models/serving");
+  return data.items;
+}
+
 export async function submitTrainJob(body: TrainJobCreate): Promise<JobResponse> {
   return apiFetch<JobResponse>("/jobs/train", {
     method: "POST",
@@ -177,11 +183,18 @@ export async function uploadFloorplan(file: File): Promise<{
   return apiFetch("/upload/floorplan", { method: "POST", body: form });
 }
 
-export async function analyzeFloorplan(file: File, requirements?: Partial<AgentRequirements>): Promise<AgentAnalyzeResponse> {
+export async function analyzeFloorplan(
+  file: File,
+  requirements?: Partial<AgentRequirements>,
+  modelName?: string
+): Promise<AgentAnalyzeResponse> {
   const form = new FormData();
   form.append("file", file);
   if (requirements) {
     form.append("requirements", JSON.stringify(requirements));
+  }
+  if (modelName) {
+    form.append("model_name", modelName);
   }
   return apiFetch<AgentAnalyzeResponse>("/analyze", { method: "POST", body: form });
 }

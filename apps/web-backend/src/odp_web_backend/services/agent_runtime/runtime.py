@@ -18,6 +18,7 @@ from .agent import Agent
 from .memory import memory
 from .model_handler import ModelHandler
 from ..floorplans import create_floorplan_record, update_floorplan_agent_result
+from ..serving_models import resolve_serving_model
 
 
 ROOT = Path(__file__).resolve().parents[6]
@@ -31,15 +32,22 @@ def _env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
-@lru_cache(maxsize=1)
-def get_model_handler() -> ModelHandler:
-    model_path = _env("MODEL_PATH") or str(_latest_seg_checkpoint())
+@lru_cache(maxsize=4)
+def _get_model_handler_for_path(model_path: str) -> ModelHandler:
+    return ModelHandler(model_path)
+
+
+def get_model_handler(model_name: str | None = None) -> tuple[ModelHandler, dict]:
+    model_path = resolve_serving_model(model_name)
     try:
-        return ModelHandler(model_path)
+        return _get_model_handler_for_path(str(model_path)), {
+            "name": model_path.name,
+            "path": str(model_path),
+        }
     except Exception as exc:
         raise RuntimeError(
-            f"Failed to load segmentation model from MODEL_PATH={model_path!r}. "
-            "Set MODEL_PATH to a valid local YOLO segmentation checkpoint."
+            f"Failed to load segmentation model from {str(model_path)!r}. "
+            "Put a valid YOLO segmentation checkpoint under models/serving."
         ) from exc
 
 
@@ -109,9 +117,17 @@ def _latest_seg_checkpoint() -> Path:
     return CHECKPOINTS_DIR / "room_separation_3-best.pt"
 
 
-def analyze_floorplan(image_bytes: bytes, filename: str = "floorplan.jpg", requirements: dict | None = None) -> dict:
+def analyze_floorplan(
+    image_bytes: bytes,
+    filename: str = "floorplan.jpg",
+    requirements: dict | None = None,
+    model_name: str | None = None,
+) -> dict:
     try:
-        results = get_model_handler().predict(image_bytes)
+        model_handler, model_info = get_model_handler(model_name)
+        results = model_handler.predict(image_bytes)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"YOLO segmentation failed: {exc}") from exc
 
@@ -155,6 +171,7 @@ def analyze_floorplan(image_bytes: bytes, filename: str = "floorplan.jpg", requi
         "visualization": results["visualization"],
         "yolo_rooms": results["rooms"],
         "requirements": requirements or {},
+        "model": model_info,
         "status": "analyzing",
     }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { analyzeFloorplan, fetchAgentSession, fetchOverview } from "../lib/api";
-import type { AgentReport, AgentRequirements, AgentYoloRoom, InferenceResult } from "../types";
+import { analyzeFloorplan, fetchAgentSession, fetchOverview, fetchServingModels } from "../lib/api";
+import type { AgentReport, AgentRequirements, AgentYoloRoom, InferenceResult, ServingModel } from "../types";
 
 type ViewMode = "upload" | "analyzing" | "result";
 
@@ -86,9 +86,15 @@ function toInferenceResult(file: File, rooms: AgentYoloRoom[], visualization: st
 function RequirementForm({
   requirements,
   onChange,
+  models,
+  selectedModel,
+  onModelChange,
 }: {
   requirements: AgentRequirements;
   onChange: (requirements: AgentRequirements) => void;
+  models: ServingModel[];
+  selectedModel: string;
+  onModelChange: (modelName: string) => void;
 }) {
   function set<K extends keyof AgentRequirements>(key: K, value: AgentRequirements[K]) {
     onChange({ ...requirements, [key]: value });
@@ -111,6 +117,26 @@ function RequirementForm({
         <span className="px-3 py-1 rounded-full bg-[var(--terracotta-pale)] text-[var(--terracotta)] text-xs border border-[var(--terracotta-light)]">
           个性化分析
         </span>
+      </div>
+      <div className="mb-5 rounded-2xl border border-[var(--border)] bg-[var(--ivory)] p-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[var(--charcoal)]">分割模型</p>
+            <p className="text-xs text-[var(--mid-gray)] mt-0.5">默认使用当前最佳模型 yolo26m_seg_best.pt，也可切换模型对比效果。</p>
+          </div>
+          <select
+            value={selectedModel}
+            onChange={(event) => onModelChange(event.target.value)}
+            className="md:min-w-72 px-3 py-2.5 rounded-xl border border-[var(--border)] bg-[var(--warm-white)] text-sm text-[var(--charcoal)] focus:outline-none focus:border-[var(--terracotta)] transition-all"
+          >
+            {models.length === 0 && <option value="">未发现 serving 模型</option>}
+            {models.map((model) => (
+              <option key={model.name} value={model.name}>
+                {model.label}{model.is_default ? " · 默认" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <label className="flex flex-col gap-1.5">
@@ -237,6 +263,9 @@ export function Analysis() {
   const [agent, setAgent] = useState<AgentReport | null>(null);
   const [agentStatus, setAgentStatus] = useState<"idle" | "analyzing" | "done" | "error">("idle");
   const [agentError, setAgentError] = useState<string | null>(null);
+  const [servingModels, setServingModels] = useState<ServingModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState("");
+  const [usedModelName, setUsedModelName] = useState("");
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -256,8 +285,18 @@ export function Analysis() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchOverview()
-      .then((data) => {
+    Promise.allSettled([fetchOverview(), fetchServingModels()])
+      .then(([overviewResult, modelsResult]) => {
+        if (modelsResult.status === "fulfilled") {
+          setServingModels(modelsResult.value);
+          const defaultModel = modelsResult.value.find((model) => model.is_default) ?? modelsResult.value[0];
+          setSelectedModel(defaultModel?.name ?? "");
+        }
+        if (overviewResult.status !== "fulfilled") {
+          setView("upload");
+          return;
+        }
+        const data = overviewResult.value;
         setInference(data.inference);
         setAgent(data.agent);
         if (data.inference?.regions?.length) setView("result");
@@ -266,6 +305,12 @@ export function Analysis() {
       .catch(() => setView("upload"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (selectedModel || servingModels.length === 0) return;
+    const defaultModel = servingModels.find((model) => model.is_default) ?? servingModels[0];
+    setSelectedModel(defaultModel?.name ?? "");
+  }, [selectedModel, servingModels]);
 
   const [uploadingProgress, setUploadingProgress] = useState(0);
 
@@ -278,6 +323,7 @@ export function Analysis() {
     setAgent(null);
     setAgentError(null);
     setAgentStatus("idle");
+    setUsedModelName("");
     setYoloRooms([]);
     setImageSize(null);
     setSelectedRoomId(null);
@@ -289,7 +335,8 @@ export function Analysis() {
     }, 300);
 
     try {
-      const yolo = await analyzeFloorplan(file, requirements);
+      const yolo = await analyzeFloorplan(file, requirements, selectedModel);
+      setUsedModelName(yolo.model?.name ?? selectedModel);
       setInference(toInferenceResult(file, yolo.yolo_rooms, yolo.visualization));
       setYoloRooms(yolo.yolo_rooms);
       setImageSize(yolo.image_size);
@@ -330,7 +377,7 @@ export function Analysis() {
       setAgentError(error instanceof Error ? error.message : "分析失败，请稍后重试。");
       setView("upload");
     }
-  }, [requirements]);
+  }, [requirements, selectedModel]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -364,7 +411,13 @@ export function Analysis() {
       </div>
 
       {view === "upload" && (
-        <RequirementForm requirements={requirements} onChange={setRequirements} />
+        <RequirementForm
+          requirements={requirements}
+          onChange={setRequirements}
+          models={servingModels}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+        />
       )}
 
       {/* Upload zone */}
@@ -430,6 +483,7 @@ export function Analysis() {
                   <div>
                     <h2 className="text-lg font-bold text-[var(--charcoal)]" style={{ fontFamily: "var(--font-display)" }}>分割结果</h2>
                     <p className="text-xs text-[var(--mid-gray)] mt-0.5">{inference?.image_name || (uploadedFile ? uploadedFile.name : "户型图分析")}</p>
+                    {usedModelName && <p className="text-[10px] text-[var(--light-gray)] mt-1 font-mono">Model: {usedModelName}</p>}
                   </div>
                   {inference?.confidence != null && inference.confidence > 0 && (
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--sage-pale)] text-[var(--sage)] text-xs border border-[var(--sage-light)]">
