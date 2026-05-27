@@ -7,34 +7,37 @@ import LoadingState from "./components/LoadingState";
 import EmptyState from "./components/EmptyState";
 
 export default function App() {
-  const analysis = useAnalysis();
+  const a = useAnalysis();
+
+  const showFloorPlan = a.visualization && (a.phase === "loading" || a.phase === "done");
+  const showAnalysis = a.phase === "done" && a.analysis;
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-50">
-      <Header onReset={analysis.reset} hasResult={analysis.phase === "done"} />
+      <Header onReset={a.reset} hasResult={showAnalysis} />
 
       <main className="flex-1 mx-auto w-full max-w-[1600px] flex flex-col lg:flex-row">
         {/* Left: Floor Plan */}
         <div className="lg:w-[45%] flex-shrink-0">
           <div className="lg:sticky lg:top-0 lg:h-[calc(100vh-64px)] flex flex-col p-4 lg:p-6">
-            {analysis.phase === "idle" || analysis.phase === "uploading" ? (
+            {a.phase === "idle" || a.phase === "uploading" ? (
               <UploadZone
-                previewUrl={analysis.previewUrl}
-                fileName={analysis.file?.name}
-                onSelect={analysis.selectFile}
-                onAnalyze={analysis.startAnalysis}
-                onReset={analysis.reset}
+                previewUrl={a.previewUrl}
+                fileName={a.file?.name}
+                onSelect={a.selectFile}
+                onAnalyze={a.startAnalysis}
+                onReset={a.reset}
               />
-            ) : analysis.phase === "loading" ? (
-              <LoadingState />
-            ) : analysis.phase === "done" && analysis.result ? (
+            ) : showFloorPlan ? (
               <FloorPlanViewer
-                visualization={analysis.result.visualization}
-                imageSize={analysis.result.image_size}
-                roomCount={analysis.result.yolo_rooms?.length || 0}
+                visualization={a.visualization}
+                imageSize={a.imageSize}
+                roomCount={a.yoloRooms?.length || 0}
               />
+            ) : a.phase === "loading" && !a.yoloReady ? (
+              <LoadingState reasoningSteps={[]} status="segmenting" />
             ) : (
-              <EmptyState onReset={analysis.reset} message={analysis.error} />
+              <EmptyState onReset={a.reset} message={a.error} />
             )}
           </div>
         </div>
@@ -42,19 +45,24 @@ export default function App() {
         {/* Right: Analysis */}
         <div className="lg:w-[55%] flex flex-col min-h-0">
           <div className="flex-1 flex flex-col overflow-y-auto p-4 lg:p-6 lg:h-[calc(100vh-64px)]">
-            {analysis.phase === "done" && analysis.result ? (
+            {showAnalysis ? (
               <AnalysisPanel
-                analysis={analysis.result.analysis}
-                yoloRooms={analysis.result.yolo_rooms}
-                reasoningSteps={analysis.reasoningSteps}
-                sessionId={analysis.sessionId}
-                sendMessage={analysis.sendMessage}
+                analysis={a.analysis}
+                yoloRooms={a.yoloRooms}
+                reasoningSteps={a.reasoningSteps}
+                sessionId={a.sessionId}
+                sendMessage={a.sendMessage}
+              />
+            ) : a.phase === "loading" ? (
+              <LoadingState
+                reasoningSteps={a.reasoningSteps}
+                status={a.yoloReady ? "analyzing" : "waiting"}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center">
                 <EmptyState
-                  onReset={analysis.phase === "error" ? analysis.reset : null}
-                  message={analysis.phase === "error" ? analysis.error : null}
+                  onReset={a.phase === "error" ? a.reset : null}
+                  message={a.phase === "error" ? a.error : null}
                 />
               </div>
             )}

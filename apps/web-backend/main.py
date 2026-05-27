@@ -1,4 +1,5 @@
 import os
+import threading
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -34,11 +35,37 @@ FRONTEND = (Path(__file__).parent.parent / "web-frontend").resolve()
 FRONTEND.mkdir(parents=True, exist_ok=True)
 
 
+def _run_agent_background(session_id: str, visualization: str, rooms: list, image_size: dict):
+    """后台线程：运行 Agent 推理，结果写入 session memory。"""
+    try:
+        sess = memory.get(session_id)
+        if sess:
+            sess["status"] = "analyzing"
+
+        result = agent.analyze(
+            image_base64=visualization,
+            rooms=rooms,
+            image_size=image_size,
+            session_id=session_id,
+            memory=memory,
+        )
+        memory.add_analysis(session_id, result["analysis"])
+
+        if sess:
+            sess["status"] = "done"
+            sess["analysis"] = result["analysis"]
+    except Exception as e:
+        sess = memory.get(session_id)
+        if sess:
+            sess["status"] = "error"
+            sess["error"] = str(e)
+
+
 @app.post("/api/analyze")
 async def analyze(file: UploadFile = File(...)):
     image_bytes = await file.read()
 
-    # 阶段 1: YOLO 分割
+    # 阶段 1: YOLO 分割（同步，1-2 秒完成）
     results = model_handler.predict(image_bytes)
 
     # 创建会话
@@ -47,32 +74,27 @@ async def analyze(file: UploadFile = File(...)):
         image_size=results["image_size"],
         visualization=results["visualization"],
     )
+    memory.get(session_id)["status"] = "analyzing"
 
-    # 阶段 2: Agent 多步推理
-    result = agent.analyze(
-        image_base64=results["visualization"],
-        rooms=results["rooms"],
-        image_size=results["image_size"],
-        session_id=session_id,
-        memory=memory,
-    )
+    # 阶段 2: Agent 多步推理（后台异步）
+    threading.Thread(
+        target=_run_agent_background,
+        args=(session_id, results["visualization"], results["rooms"], results["image_size"]),
+        daemon=True,
+    ).start()
 
-    # 保存分析结果到会话
-    memory.add_analysis(session_id, result["analysis"])
-
+    # 立即返回 YOLO 结果 + session_id
     return {
         "session_id": session_id,
         "image_size": results["image_size"],
         "visualization": results["visualization"],
         "yolo_rooms": results["rooms"],
-        "analysis": result["analysis"],
-        "reasoning_steps": result["reasoning_steps"],
+        "status": "analyzing",
     }
 
 
 @app.post("/api/chat/{session_id}")
 async def chat(session_id: str, message: str = Form(...)):
-    """交互式对话：基于已分析的户型进行追问。"""
     result = agent.chat(session_id, message, memory)
     return {
         "session_id": session_id,
@@ -83,15 +105,20 @@ async def chat(session_id: str, message: str = Form(...)):
 
 @app.get("/api/session/{session_id}")
 async def get_session(session_id: str):
-    """获取会话历史。"""
     sess = memory.get(session_id)
     if not sess:
         return {"error": "会话不存在或已过期"}
     return {
         "session_id": session_id,
+        "status": sess.get("status", "unknown"),
         "analyses": sess["analyses"],
         "messages": sess["messages"],
         "reasoning_steps": sess["reasoning_steps"],
+        "analysis": sess.get("analysis"),
+        "image_size": sess["image_size"],
+        "visualization": sess["visualization"],
+        "yolo_rooms": sess["yolo_rooms"],
+        "error": sess.get("error"),
     }
 
 

@@ -112,11 +112,14 @@ class Agent:
             msg = response.choices[0].message
 
             if not msg.tool_calls:
-                reasoning_steps.append({
+                step = {
                     "step": f"phase1-{iteration}",
                     "type": "phase1_done",
                     "content": (msg.content or "工具收集完成")[:100],
-                })
+                }
+                reasoning_steps.append(step)
+                if memory and session_id:
+                    memory.add_reasoning(session_id, step)
                 break
 
             for tc in msg.tool_calls:
@@ -130,13 +133,16 @@ class Agent:
                 all_tool_results[fn_name] = all_tool_results.get(fn_name, [])
                 all_tool_results[fn_name].append(tool_result)
 
-                reasoning_steps.append({
+                step = {
                     "step": f"phase1-{iteration}",
                     "type": "tool_call",
                     "tool": fn_name,
                     "arguments": fn_args,
                     "result_preview": tool_result[:200],
-                })
+                }
+                reasoning_steps.append(step)
+                if memory and session_id:
+                    memory.add_reasoning(session_id, step)
 
                 messages.append({
                     "role": "assistant",
@@ -246,8 +252,8 @@ class Agent:
         })
 
         if memory and session_id:
-            for step in reasoning_steps:
-                memory.add_reasoning(session_id, step)
+            # phase1 步骤已增量保存，这里只保存 phase2 final
+            memory.add_reasoning(session_id, reasoning_steps[-1])
 
         return {
             "analysis": parsed,

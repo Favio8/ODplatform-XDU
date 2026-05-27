@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 export default function ChatPanel({ sessionId, sendMessage }) {
   const [messages, setMessages] = useState([]);
@@ -69,7 +70,13 @@ export default function ChatPanel({ sessionId, sendMessage }) {
                     : "bg-zinc-100 text-zinc-700 rounded-tl-md"
                 }`}
               >
-                {msg.content}
+                {msg.role === "user" ? (
+                  msg.content
+                ) : (
+                  <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 prose-headings:my-2 prose-code:text-xs prose-code:bg-zinc-200 prose-code:px-1 prose-code:rounded">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                )}
               </div>
             </motion.div>
           ))}
