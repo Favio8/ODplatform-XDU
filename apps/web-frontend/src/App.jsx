@@ -51,7 +51,6 @@ export default function App() {
                 yoloRooms={a.yoloRooms}
                 reasoningSteps={a.reasoningSteps}
                 sessionId={a.sessionId}
-                sendMessage={a.sendMessage}
               />
             ) : a.phase === "loading" ? (
               <LoadingState

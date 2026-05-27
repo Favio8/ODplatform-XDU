@@ -1,26 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
-export default function ChatPanel({ sessionId, sendMessage }) {
+export default function ChatPanel({ sessionId }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef(null);
-  const shouldScrollRef = useRef(false);
-
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
-
-  // 只在用户发送消息后滚动，不随 mount / analysis 结果自动滚动
-  useEffect(() => {
-    if (shouldScrollRef.current) {
-      scrollToBottom();
-      shouldScrollRef.current = false;
-    }
-  }, [messages, scrollToBottom]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -28,7 +14,6 @@ export default function ChatPanel({ sessionId, sendMessage }) {
 
     setInput("");
     setMessages((m) => [...m, { role: "user", content: text }]);
-    shouldScrollRef.current = true;
     setLoading(true);
 
     try {
@@ -42,7 +27,6 @@ export default function ChatPanel({ sessionId, sendMessage }) {
 
       if (!res.ok) throw new Error(await res.text());
 
-      // 流式读取 SSE
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -74,7 +58,6 @@ export default function ChatPanel({ sessionId, sendMessage }) {
                   };
                   return updated;
                 });
-                shouldScrollRef.current = true;
               }
             } catch {}
           }
@@ -99,7 +82,7 @@ export default function ChatPanel({ sessionId, sendMessage }) {
         </span>
       </div>
 
-      {/* Messages */}
+      {/* Messages — no auto-scroll */}
       <div className="flex-1 overflow-y-auto space-y-3 mb-3 min-h-[120px] max-h-[280px]">
         <AnimatePresence initial={false}>
           {messages.map((msg, i) => (
@@ -141,23 +124,6 @@ export default function ChatPanel({ sessionId, sendMessage }) {
             </motion.div>
           ))}
         </AnimatePresence>
-
-        {loading && messages.length === 0 && (
-          <div className="flex gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shrink-0">
-              <Bot className="w-3 h-3 text-white" />
-            </div>
-            <div className="bg-zinc-100 rounded-2xl rounded-tl-md px-3 py-2">
-              <div className="flex gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-300 animate-bounce" />
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-300 animate-bounce" style={{ animationDelay: "0.15s" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-brand-300 animate-bounce" style={{ animationDelay: "0.3s" }} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div ref={bottomRef} />
       </div>
 
       {/* Input */}
@@ -167,7 +133,7 @@ export default function ChatPanel({ sessionId, sendMessage }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="追问户型细节，如：主卧能改造吗？"
+          placeholder="追问任何问题…"
           className="flex-1 h-9 px-3.5 text-sm rounded-xl border border-zinc-200 bg-white/70
             focus:outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-100
             placeholder:text-zinc-300 transition-all"

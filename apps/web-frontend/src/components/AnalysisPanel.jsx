@@ -18,7 +18,7 @@ const ratingColors = {
   "C": "from-zinc-400 to-zinc-500 text-zinc-600",
 };
 
-export default function AnalysisPanel({ analysis, yoloRooms, reasoningSteps, sessionId, sendMessage }) {
+export default function AnalysisPanel({ analysis, yoloRooms, reasoningSteps, sessionId }) {
   const scores = analysis.scores || {};
   const rooms = analysis.rooms || [];
   const issues = analysis.core_issues || [];
@@ -218,7 +218,7 @@ export default function AnalysisPanel({ analysis, yoloRooms, reasoningSteps, ses
 
       {/* ---------- Chat ---------- */}
       {sessionId && sendMessage && (
-        <ChatPanel sessionId={sessionId} sendMessage={sendMessage} />
+        <ChatPanel sessionId={sessionId} />
       )}
     </div>
   );

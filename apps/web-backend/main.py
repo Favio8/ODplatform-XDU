@@ -115,8 +115,14 @@ async def chat_stream(session_id: str, message: str = Form(...)):
             yield "data: [DONE]\n\n"
             return
 
-        # 构建对话上下文
-        messages = [{"role": "system", "content": agent._system_prompt()}]
+        # 构建对话上下文（通用助手，不限制话题）
+        chat_system = (
+            "你是一个有用的AI助手，同时也是室内设计专家。"
+            "你正在与用户讨论一份已分析过的户型图。"
+            "可以回答装修、户型、设计相关问题，也可以闲聊。"
+            "用中文回复，简洁友好。"
+        )
+        messages = [{"role": "system", "content": chat_system}]
 
         if sess.get("analyses"):
             last = sess["analyses"][-1]
