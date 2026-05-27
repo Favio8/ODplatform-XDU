@@ -217,7 +217,7 @@ export default function AnalysisPanel({ analysis, yoloRooms, reasoningSteps, ses
       )}
 
       {/* ---------- Chat ---------- */}
-      {sessionId && sendMessage && (
+      {sessionId && (
         <ChatPanel sessionId={sessionId} />
       )}
     </div>
