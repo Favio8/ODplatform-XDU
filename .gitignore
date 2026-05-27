@@ -93,6 +93,7 @@ apps/web-frontend/vite.config.d.ts
 apps/web-frontend/vite.config.js
 apps/platform/logging/
 apps/platform/configs/train.d5-demo.yaml
+apps/platform/configs/datasets/test_cn.yaml
 apps/platform/src/odp_platform/data_pipeline-mentor/
 【学生成果物】*/
 docs/architecture/ADR-001-monorepo.md
@@ -102,6 +103,7 @@ tmp/
 temp/
 题目说明.md
 老师提供的文档/
+tests/推理模块验证开发/
 
 # ============================================================
 # 大文件 / 二进制
