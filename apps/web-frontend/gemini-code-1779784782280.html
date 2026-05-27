@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ODPlatform - AI Floorplan Segmentation Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f4f7fc;
+            color: #1e293b;
+            overflow-x: hidden;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden text-sm">
+
+    <aside class="w-64 bg-[#0f172a] text-slate-400 flex flex-col justify-between flex-shrink-0 border-r border-slate-800">
+        <div>
+            <div class="p-5 flex items-center gap-3 border-b border-slate-800">
+                <div class="bg-blue-600 text-white p-2 rounded-lg flex items-center justify-center">
+                    <i class="fa-solid fa-layer-group text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-white font-bold text-base tracking-wide">ODPlatform</h1>
+                    <p class="text-[10px] text-slate-500">AI Floorplan Segmentation</p>
+                </div>
+            </div>
+            
+            <nav class="p-4 space-y-1">
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-600 text-white font-medium transition-all">
+                    <i class="fa-solid fa-chart-pie w-5"></i><span>数据转换</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-slate-200 transition-all">
+                    <i class="fa-solid fa-shield-heart w-5"></i><span>数据质检</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-slate-200 transition-all">
+                    <i class="fa-solid fa-sliders w-5"></i><span>运行配置</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-slate-200 transition-all">
+                    <i class="fa-solid fa-scissors w-5"></i><span>图像分割训练</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-slate-200 transition-all">
+                    <i class="fa-solid fa-square-poll-vertical w-5"></i><span>分割评估</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-800 hover:text-slate-200 transition-all">
+                    <i class="fa-solid fa-robot w-5"></i><span>Agent分析</span>
+                </a>
+            </nav>
+        </div>
+
+        <div class="p-4 m-4 bg-slate-900/50 rounded-xl border border-slate-800/80">
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">项目概览</h3>
+            <div class="space-y-2 text-xs">
+                <div class="flex justify-between"><span class="text-slate-500">项目名称</span><span class="text-slate-300 font-medium">上海金沙雅苑_户型改造</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">任务类型</span><span class="text-slate-300">房间分割 + 改造建议</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">创建时间</span><span class="text-slate-300">2024-05-18</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">当前阶段</span><span class="px-2 py-0.5 bg-green-500/10 text-green-400 rounded text-[10px]">Agent分析</span></div>
+            </div>
+            <button class="w-full mt-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2">
+                <i class="fa-solid fa-gear"></i>项目设置
+            </button>
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        
+        <header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 shadow-sm">
+            <div class="flex items-center gap-3">
+                <span class="text-slate-400 text-xs">当前项目：</span>
+                <div class="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-all">
+                    <span class="font-semibold text-slate-700">上海金沙雅苑_户型改造项目</span>
+                    <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
+                </div>
+            </div>
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-2 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <span class="text-slate-500">运行环境:</span>
+                    <span class="font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-200">生产环境</span>
+                </div>
+                <button class="text-xs text-slate-600 hover:text-blue-600 border border-slate-200 px-3 py-1.5 rounded-lg hover:border-blue-200 transition-all">环境配置</button>
+                <div class="h-4 w-px bg-slate-200"></div>
+                <div class="flex items-center gap-3 cursor-pointer">
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Avatar" class="w-8 h-8 rounded-full border-2 border-blue-500/20 object-cover">
+                    <div class="text-xs">
+                        <p class="font-medium text-slate-700">欢迎您，设计师</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-1 flex overflow-hidden">
+            
+            <main class="flex-1 p-6 overflow-y-auto space-y-6 min-w-0">
+                
+                <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">您好，设计师 👋</h2>
+                        <p class="text-slate-400 text-xs mt-1">ODPlatform 为您提供端到端的户型图房间分割与智能改造建议</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button class="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-xl font-medium transition-all flex items-center gap-2 text-xs"><i class="fa-solid fa-cloud-arrow-up"></i> 上传数据</button>
+                        <button class="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-medium transition-all flex items-center gap-2 text-xs"><i class="fa-solid fa-play"></i> 运行训练</button>
+                        <button class="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-medium transition-all flex items-center gap-2 text-xs"><i class="fa-solid fa-chart-line"></i> 查看评估</button>
+                        <button class="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-medium transition-all flex items-center gap-2 text-xs"><i class="fa-solid fa-file-contract"></i> 打开分析报告</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-slate-400">系统状态</p>
+                            <h4 class="text-lg font-bold text-green-600 mt-1 flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-base"></i> 正常</h4>
+                            <p class="text-[11px] text-slate-400 mt-1">所有模块运行正常</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-slate-400">数据概览</p>
+                            <div class="flex items-baseline gap-3 mt-1">
+                                <span class="text-xl font-bold text-slate-800">2</span><span class="text-xs text-slate-400">数据集</span>
+                                <span class="text-xl font-bold text-slate-800">3,248</span><span class="text-xs text-slate-400">平面图像</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+                        <p class="text-xs font-medium text-slate-400">训练状态</p>
+                        <h4 class="text-lg font-bold text-blue-600 mt-1 flex items-center gap-1.5"><i class="fa-solid fa-circle-notch animate-spin text-base"></i> 已完成</h4>
+                        <p class="text-[11px] text-slate-400 mt-1">最新训练: 2024-05-20 10:42</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+                        <p class="text-xs font-medium text-slate-400">Agent分析</p>
+                        <h4 class="text-lg font-bold text-purple-600 mt-1 flex items-center gap-1.5"><i class="fa-solid fa-bolt text-base"></i> 已就绪</h4>
+                        <p class="text-[11px] text-slate-400 mt-1">可生成改造建议与解读</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">整体流程</h3>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                            <i class="fa-solid fa-folder-open text-blue-500"></i>
+                            <div class="text-xs"><p class="font-medium text-slate-700">原始数据</p><span class="text-[10px] text-green-600"><i class="fa-solid fa-check"></i> 已完成</span></div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-slate-300 text-xs mx-1"></i>
+                        <div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                            <i class="fa-solid fa-wand-magic-sparkles text-purple-500"></i>
+                            <div class="text-xs"><p class="font-medium text-slate-700">处理数据</p><span class="text-[10px] text-green-600"><i class="fa-solid fa-check"></i> 已完成</span></div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-slate-300 text-xs mx-1"></i>
+                        <div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                            <i class="fa-solid fa-clipboard-check text-teal-500"></i>
+                            <div class="text-xs"><p class="font-medium text-slate-700">质检</p><span class="text-[10px] text-green-600"><i class="fa-solid fa-check"></i> 已完成</span></div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-slate-300 text-xs mx-1"></i>
+                        <div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+                            <i class="fa-solid fa-sliders text-orange-500"></i>
+                            <div class="text-xs"><p class="font-medium text-slate-700">配置</p><span class="text-[10px] text-green-600"><i class="fa-solid fa-check"></i> 已完成</span></div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-slate-300 text-xs mx-1"></i>
+                        <div class="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-xl border border-blue-200">
+                            <i class="fa-solid fa-scissors text-blue-600"></i>
+                            <div class="text-xs"><p class="font-medium text-blue-700">分割训练</p><span class="text-[10px] text-blue-600"><i class="fa-solid fa-circle-notch animate-spin"></i> 进行中</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-700 mb-4">数据集概览</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600"><i class="fa-solid fa-images text-lg"></i></div>
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="font-semibold text-slate-800 text-xs truncate">room_separation_3</h4>
+                                        <p class="text-[11px] text-slate-400 mt-0.5">1,812 张图像 · 1024x1024</p>
+                                    </div>
+                                    <span class="px-2 py-0.5 bg-green-50 text-green-600 rounded text-[10px] border border-green-200">已过质检</span>
+                                </div>
+                                <div class="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
+                                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600"><i class="fa-solid fa-map text-lg"></i></div>
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="font-semibold text-slate-800 text-xs truncate">floorplan_segmentation</h4>
+                                        <p class="text-[11px] text-slate-400 mt-0.5">1,436 张图像 · 1024x1024</p>
+                                    </div>
+                                    <span class="px-2 py-0.5 bg-green-50 text-green-600 rounded text-[10px] border border-green-200">已过质检</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+                        <h3 class="text-sm font-bold text-slate-700 mb-2">质检摘要</h3>
+                        <div class="flex-1 h-36" id="qcPieChart"></div>
+                        <button class="w-full py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-medium text-slate-600 transition-all">查看质检报告</button>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-700 mb-4">配置追踪</h3>
+                            <div class="space-y-2.5">
+                                <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/60 text-xs">
+                                    <span class="text-slate-500">DEFAULT</span><span class="font-mono text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">系统默认配置</span>
+                                </div>
+                                <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/60 text-xs">
+                                    <span class="text-slate-500">YAML</span><span class="font-mono text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">config/floorplan_seg.yaml</span>
+                                </div>
+                                <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/60 text-xs">
+                                    <span class="text-slate-500">CLI Override</span><span class="font-mono text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100">--batch-size 8 --lr 5e-5</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center text-xs pt-4 border-t border-slate-100">
+                            <span class="text-slate-400">最终生效配置已导出</span>
+                            <button class="text-blue-600 font-medium hover:underline">查看最终配置</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs lg:col-span-2 flex flex-col">
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-700">训练状态 <span class="ml-2 px-2 py-0.5 bg-green-50 text-green-600 rounded text-[11px] font-normal border border-green-200">已完成</span></h3>
+                                <p class="text-[11px] text-slate-400 mt-0.5">模型名称: SegFormer-B0 &nbsp;|&nbsp; 轮数: 120/120</p>
+                            </div>
+                            <div class="flex items-center gap-4 text-xs">
+                                <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-green-500 inline-block"></span> mIoU (0.8721)</span>
+                                <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-blue-500 inline-block"></span> Loss (0.12)</span>
+                            </div>
+                        </div>
+                        <div class="flex-1 min-h-[220px]" id="trainLineChart"></div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-sm font-bold text-slate-700">活动日志</h3>
+                                <button class="text-xs text-blue-600 font-medium hover:underline">查看更多</button>
+                            </div>
+                            <div class="space-y-4 max-h-[220px] overflow-y-auto pr-1">
+                                <div class="flex gap-3 text-xs">
+                                    <span class="text-slate-400 font-mono flex-shrink-0">10:42:31</span>
+                                    <p class="text-slate-600 flex-1"><strong class="text-slate-800">Agent分析完成</strong>，已生成改造建议</p>
+                                </div>
+                                <div class="flex gap-3 text-xs">
+                                    <span class="text-slate-400 font-mono flex-shrink-0">10:42:10</span>
+                                    <p class="text-slate-600 flex-1"><strong class="text-slate-800">分割评估完成</strong>，mIoU稳定在 0.8721</p>
+                                </div>
+                                <div class="flex gap-3 text-xs">
+                                    <span class="text-slate-400 font-mono flex-shrink-0">10:31:45</span>
+                                    <p class="text-slate-600 flex-1">训练完成，最佳模型已保存 (<span class="text-blue-600 font-mono">best.pt</span>)</p>
+                                </div>
+                                <div class="flex gap-3 text-xs">
+                                    <span class="text-slate-400 font-mono flex-shrink-0">10:29:12</span>
+                                    <p class="text-orange-600 flex-1"><i class="fa-solid fa-triangle-exclamation"></i> 质检流完成，发现 98 条警告</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+
+            <aside class="w-80 bg-white border-l border-slate-200 p-5 flex flex-col justify-between flex-shrink-0 overflow-y-auto shadow-sm">
+                <div class="space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="font-bold text-slate-800 text-sm">户型图分割与改造建议</h3>
+                            <span class="px-2 py-0.5 bg-green-50 text-green-600 rounded text-[11px] border border-green-200">已就绪</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-3">分割结果可视化：</p>
+                        <div class="w-full aspect-square bg-slate-100 rounded-xl p-3 relative border border-slate-200 flex flex-col gap-1.5 overflow-hidden">
+                            <div class="flex gap-1.5 flex-1">
+                                <div class="bg-emerald-200/70 border border-emerald-400/40 rounded flex-1 flex items-center justify-center text-[10px] text-emerald-800 font-medium">客厅</div>
+                                <div class="flex flex-col gap-1.5 flex-1">
+                                    <div class="bg-amber-200/70 border border-amber-400/40 rounded flex-1 flex items-center justify-center text-[10px] text-amber-800 font-medium">主卧</div>
+                                    <div class="bg-orange-200/70 border border-orange-400/40 rounded flex-1 flex items-center justify-center text-[10px] text-orange-800 font-medium">次卧</div>
+                                </div>
+                            </div>
+                            <div class="flex gap-1.5 h-1/3">
+                                <div class="bg-rose-200/70 border border-rose-400/40 rounded flex-1 flex items-center justify-center text-[10px] text-rose-800 font-medium">厨房</div>
+                                <div class="bg-purple-200/70 border border-purple-400/40 rounded w-1/3 flex items-center justify-center text-[10px] text-purple-800 font-medium">卫生间</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Agent 智能改造建议</h4>
+                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60 space-y-1">
+                            <div class="flex items-center gap-2 font-semibold text-slate-800 text-xs">
+                                <i class="fa-solid fa-wand-magic-sparkles text-blue-500"></i>
+                                <span>1. 优化动线设计</span>
+                            </div>
+                            <p class="text-slate-500 text-[11px] leading-relaxed">建议将厨房与餐厅打通，缩短备餐动线，提升空间通透性。</p>
+                        </div>
+                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60 space-y-1">
+                            <div class="flex items-center gap-2 font-semibold text-slate-800 text-xs">
+                                <i class="fa-solid fa-box-open text-purple-500"></i>
+                                <span>2. 增强收纳空间</span>
+                            </div>
+                            <p class="text-slate-500 text-[11px] leading-relaxed">在玄关与主卧增加定制收纳柜，提高整体空间利用率。</p>
+                        </div>
+                        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/60 space-y-1">
+                            <div class="flex items-center gap-2 font-semibold text-slate-800 text-xs">
+                                <i class="fa-solid fa-sun text-amber-500"></i>
+                                <span>3. 提升采光与通风</span>
+                            </div>
+                            <p class="text-slate-500 text-[11px] leading-relaxed">建议扩大客厅阳台开口，增强自然采光与空气对流效果。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100">
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">空间面积统计</h4>
+                    <div class="h-32" id="spacePieChart"></div>
+                    <p class="text-[10px] text-slate-400 text-center mt-2">* 以上建议由 AI 自动生成，仅供参考。</p>
+                </div>
+            </aside>
+
+        </div>
+    </div>
+
+    <script>
+        // 1. 质检摘要环形图
+        const qcDom = document.getElementById('qcPieChart');
+        const qcChart = echarts.init(qcDom);
+        qcChart.setOption({
+            tooltip: { trigger: 'item' },
+            legend: { bottom: '0', itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 11 } },
+            series: [{
+                name: '数据状态',
+                type: 'pie',
+                radius: ['50%', '75%'],
+                avoidLabelOverlap: false,
+                itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+                label: { show: true, position: 'center', formatter: '3,248\n总张数', fontSize: 13, fontWeight: 'bold' },
+                data: [
+                    { value: 3102, name: 'PASS', itemStyle: { color: '#10b981' } },
+                    { value: 98, name: 'WARNING', itemStyle: { color: '#f59e0b' } },
+                    { value: 48, name: 'ERROR', itemStyle: { color: '#ef4444' } }
+                ]
+            }]
+        });
+
+        // 2. 训练状态曲线图 (Dual-Axis)
+        const trainDom = document.getElementById('trainLineChart');
+        const trainChart = echarts.init(trainDom);
+        let epochs = Array.from({length: 120}, (_, i) => i + 1);
+        let miouData = epochs.map(e => 0.3 + 0.57 * Math.sin(e/80) + Math.random()*0.01);
+        let lossData = epochs.map(e => 1.8 * Math.exp(-e/30) + Math.random()*0.02);
+
+        trainChart.setOption({
+            grid: { top: '10%', bottom: '12%', left: '5%', right: '5%', containLabel: true },
+            xAxis: { type: 'category', data: epochs, axisLine: { lineStyle: { color: '#cbd5e1' } } },
+            yAxis: [
+                { type: 'value', name: 'mIoU', min: 0, max: 1, splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } } },
+                { type: 'value', name: 'Loss', min: 0, max: 2, splitLine: { show: false } }
+            ],
+            series: [
+                { name: 'mIoU', type: 'line', data: miouData, symbol: 'none', itemStyle: { color: '#10b981' }, lineStyle: { width: 2 } },
+                { name: 'Loss', type: 'line', yAxisIndex: 1, data: lossData, symbol: 'none', itemStyle: { color: '#3b82f6' }, lineStyle: { width: 2 } }
+            ]
+        });
+
+        // 3. 右侧空间统计饼图
+        const spaceDom = document.getElementById('spacePieChart');
+        const spaceChart = echarts.init(spaceDom);
+        spaceChart.setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: '80%',
+                center: ['50%', '50%'],
+                data: [
+                    { value: 35, name: '客厅', itemStyle: { color: '#34d399' } },
+                    { value: 25, name: '主卧', itemStyle: { color: '#fbcfe8' } },
+                    { value: 15, name: '次卧', itemStyle: { color: '#fed7aa' } },
+                    { value: 15, name: '厨房', itemStyle: { color: '#fecdd3' } },
+                    { value: 10, name: '卫生间', itemStyle: { color: '#e9d5ff' } }
+                ],
+                label: { show: true, position: 'inside', formatter: '{b}', fontSize: 10 }
+            }]
+        });
+
+        // 统一响应式自适应
+        window.addEventListener('resize', () => {
+            qcChart.resize();
+            trainChart.resize();
+            spaceChart.resize();
+        });
+    </script>
+</body>
+</html>

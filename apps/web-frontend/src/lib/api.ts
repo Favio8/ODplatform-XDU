@@ -1,0 +1,206 @@
+import type {
+  DatasetProfile,
+  JobResponse,
+  OverviewPayload,
+  RunSummary,
+  CheckpointItem,
+  AgentAnalyzeResponse,
+  AgentRequirements,
+  AgentSessionResponse,
+  FloorplanRecord,
+  ConfigJobCreate,
+  EvalJobCreate,
+  EvaluationReportDetail,
+  EvaluationReportSummary,
+  ProjectStatus,
+  TrainJobCreate,
+  TrainingCurvePoint,
+  TransformJobCreate,
+  DatasetUploadResult,
+} from "../types";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000/api";
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, init);
+  if (!res.ok) {
+    throw new Error(`${path} returned ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function fetchOverview(): Promise<OverviewPayload> {
+  return apiFetch<OverviewPayload>("/overview");
+}
+
+export async function fetchDatasets(): Promise<DatasetProfile[]> {
+  const data = await apiFetch<{ items: DatasetProfile[] }>("/datasets");
+  return data.items;
+}
+
+export async function fetchProjectStatus(): Promise<ProjectStatus> {
+  return apiFetch<ProjectStatus>("/project/status");
+}
+
+export async function createDataset(body: {
+  name: string;
+  class_names: string[];
+  train?: number;
+  val?: number;
+  test?: number;
+}): Promise<DatasetProfile> {
+  return apiFetch<DatasetProfile>("/datasets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function uploadDatasetArchive(file: File, datasetName: string): Promise<DatasetUploadResult> {
+  const form = new FormData();
+  form.append("dataset_name", datasetName);
+  form.append("file", file);
+  return apiFetch<DatasetUploadResult>("/datasets/upload", { method: "POST", body: form });
+}
+
+export async function updateDataset(
+  name: string,
+  body: {
+    class_names?: string[];
+    train?: number;
+    val?: number;
+    test?: number;
+  }
+): Promise<DatasetProfile> {
+  return apiFetch<DatasetProfile>(`/datasets/${name}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteDataset(name: string): Promise<{ success: boolean; name: string }> {
+  return apiFetch<{ success: boolean; name: string }>(`/datasets/${name}`, {
+    method: "DELETE",
+  });
+}
+
+export async function fetchTrainingRuns(): Promise<RunSummary[]> {
+  const data = await apiFetch<{ items: RunSummary[] }>("/training/runs");
+  return data.items;
+}
+
+export async function fetchCheckpoints(): Promise<CheckpointItem[]> {
+  const data = await apiFetch<{ items: CheckpointItem[] }>("/checkpoints");
+  return data.items;
+}
+
+export async function fetchJobs(): Promise<JobResponse[]> {
+  return apiFetch<JobResponse[]>("/jobs");
+}
+
+export async function fetchJob(jobId: string): Promise<JobResponse> {
+  return apiFetch<JobResponse>(`/jobs/${jobId}`);
+}
+
+export async function fetchTrainingCurves(): Promise<Array<{
+  run_id: string; dataset: string; task: string; model: string;
+  epochs: number; status: string; metric: number | null;
+  best_checkpoint: string | null; last_checkpoint: string | null;
+  curve: TrainingCurvePoint[];
+}>> {
+  return apiFetch("/training/curves/latest");
+}
+
+export async function fetchEvaluationReports(): Promise<EvaluationReportSummary[]> {
+  const data = await apiFetch<{ items: EvaluationReportSummary[] }>("/evaluation/reports");
+  return data.items;
+}
+
+export async function fetchEvaluationReport(reportId: string): Promise<EvaluationReportDetail> {
+  return apiFetch<EvaluationReportDetail>(`/evaluation/reports/${reportId}`);
+}
+
+export async function submitTrainJob(body: TrainJobCreate): Promise<JobResponse> {
+  return apiFetch<JobResponse>("/jobs/train", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function submitInitJob(): Promise<JobResponse> {
+  return apiFetch<JobResponse>("/jobs/init", { method: "POST" });
+}
+
+export async function submitTransformJob(body: TransformJobCreate): Promise<JobResponse> {
+  return apiFetch<JobResponse>("/jobs/transform", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function submitValidateJob(body: { dataset: string; task_type?: string }): Promise<JobResponse> {
+  return apiFetch<JobResponse>("/jobs/validate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function submitConfigJob(body: ConfigJobCreate): Promise<JobResponse> {
+  return apiFetch<JobResponse>("/jobs/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function submitEvaluateJob(body: EvalJobCreate): Promise<JobResponse> {
+  return apiFetch<JobResponse>("/jobs/evaluate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function cancelJob(jobId: string): Promise<JobResponse> {
+  return apiFetch<JobResponse>(`/jobs/${jobId}`, { method: "DELETE" });
+}
+
+export async function uploadFloorplan(file: File): Promise<{
+  success: boolean; filename: string; path: string; message: string;
+}> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch("/upload/floorplan", { method: "POST", body: form });
+}
+
+export async function analyzeFloorplan(file: File, requirements?: Partial<AgentRequirements>): Promise<AgentAnalyzeResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  if (requirements) {
+    form.append("requirements", JSON.stringify(requirements));
+  }
+  return apiFetch<AgentAnalyzeResponse>("/analyze", { method: "POST", body: form });
+}
+
+export async function fetchAgentSession(sessionId: string): Promise<AgentSessionResponse> {
+  return apiFetch<AgentSessionResponse>(`/session/${sessionId}`);
+}
+
+export async function fetchFloorplans(): Promise<FloorplanRecord[]> {
+  const data = await apiFetch<{ items: FloorplanRecord[] }>("/floorplans");
+  return data.items;
+}
+
+export async function fetchFloorplan(recordId: string): Promise<FloorplanRecord> {
+  return apiFetch<FloorplanRecord>(`/floorplans/${recordId}`);
+}
+
+export async function deleteFloorplan(recordId: string): Promise<{ success: boolean; record_id: string }> {
+  return apiFetch<{ success: boolean; record_id: string }>(`/floorplans/${recordId}`, {
+    method: "DELETE",
+  });
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RoomWise — 户型图智能分析与装修建议</title>
+    <meta name="description" content="上传户型图，AI 智能分割房间并生成专业装修建议" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23C4714F'/><path d='M8 8h6v6H8zM18 8h6v6h-6zM8 18h6v6H8zM18 18h6v4h-6z' fill='white' opacity='.9'/></svg>" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap');
+      :root {
+        --cream: #FAF7F2;
+        --ivory: #F5F0E8;
+        --warm-white: #FDFCFA;
+        --parchment: #EDE8DF;
+        --terracotta: #C4714F;
+        --terracotta-light: #D4876A;
+        --terracotta-pale: #F5E8E0;
+        --sage: #7A8C7A;
+        --sage-light: #A3B1A3;
+        --sage-pale: #E8EDEB;
+        --charcoal: #2C2620;
+        --warm-gray: #6B635A;
+        --mid-gray: #A89F94;
+        --light-gray: #D4CCC2;
+        --border: #E5DDD3;
+        --border-dark: #C8BFB2;
+        --shadow-sm: 0 1px 3px rgba(44,38,32,0.06), 0 1px 2px rgba(44,38,32,0.04);
+        --shadow-md: 0 4px 12px rgba(44,38,32,0.08), 0 2px 4px rgba(44,38,32,0.04);
+        --shadow-lg: 0 12px 32px rgba(44,38,32,0.10), 0 4px 8px rgba(44,38,32,0.06);
+        --radius-sm: 8px;
+        --radius-md: 14px;
+        --radius-lg: 20px;
+        --font-display: 'Fraunces', Georgia, serif;
+        --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body, #root {
+        margin: 0;
+        min-height: 100%;
+        font-family: var(--font-body);
+        background-color: var(--cream);
+        color: var(--charcoal);
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      body { background-color: var(--cream); }
+      h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.02em; }
+      ::-webkit-scrollbar { width: 5px; height: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: var(--light-gray); border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: var(--mid-gray); }
+      ::selection { background: var(--terracotta-pale); color: var(--terracotta); }
+      a { color: inherit; text-decoration: none; }
+      button { font-family: var(--font-body); }
+      input, select, textarea { font-family: var(--font-body); }
+    </style>
+    <script type="module" src="/src/main.tsx"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
