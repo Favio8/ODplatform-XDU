@@ -92,6 +92,13 @@ classDiagram
 
 ### 1.2 前端组件树
 
+前端采用 React 19 + Vite 8 构建，17 个组件按职责分为四层：
+
+- **布局层**：`App.jsx` 是顶层容器，采用左右双栏布局（左侧 sticky 45% 放户型图，右侧 scroll 55% 放分析结果）。`Header` 提供导航和重置入口。两个 `ErrorBoundary` 分别包裹左右面板，确保局部崩溃不影响另一侧。
+- **上传与展示层**：`UploadZone` 处理拖拽/点击上传，`FloorPlanViewer` 展示分割结果图——内置缩放工具栏和 Portal 全屏预览，`LoadingState` 在等待期间渲染实时推理步骤。
+- **分析结果层**：`AnalysisPanel` 是右侧的顶层容器，内部组合了 Hero（评级+优劣势）、4 个 `ScoreRing`（环形评分）、核心问题卡片、N 个 `RoomAccordion`（折叠房间卡，内含 `SuggestionGrid` 2×2 建议网格）、`ReasoningSteps`（可折叠推理面板）、`ChatPanel`（流式对话）。
+- **通用层**：`EmptyState` 覆盖空状态和错误提示，`ErrorBoundary` 捕获渲染异常。
+
 ```mermaid
 graph TD
     App[App.jsx]
@@ -240,6 +247,14 @@ flowchart TB
 
 ### 2.3 为什么分两阶段？
 
+最初的设计是单次调用——把工具定义和 JSON schema 放在同一个 prompt 里，期待 LLM "边调工具边输出最终 JSON"。但在 Gemini 3 Flash 上反复测试后，这个方案有两个致命缺陷：
+
+第一，**上下文污染**。每轮工具调用会在对话历史中追加若干条 assistant + tool 消息。当 LLM 把所有工具调完后，上下文窗口已被 30+ 条消息占满，此时再要求它输出 2000+ 字符的结构化 JSON，频繁出现输出为空的情况。
+
+第二，**注意力分散**。LLM 在同一个对话中既要决定"下一步调用哪个工具"，又要记住 JSON 的每一个字段名和层级结构。实际表现为：工具调用正确（13-16 次全部命中），但最终 JSON 中 `rating` 和 `scores` 字段缺失。
+
+两阶段方案通过"新建对话"解决了这两个问题：
+
 | 对比 | 单次调用 | 两阶段 |
 |------|:---:|:---:|
 | 工具调用上下文 | 与 JSON 生成混在一起 | 阶段 1 专用，短上下文 |
@@ -247,11 +262,15 @@ flowchart TB
 | 实时可见性 | 用户等到最后才看到结果 | 阶段 1 每步增量写入 memory → 前端实时展示 |
 | 容错 | 一处失败全丢 | 阶段 1 数据已落盘，阶段 2 可重试 |
 
+额外收益：阶段 1 的工具结果被精简汇总后传入阶段 2，等于做了一次"数据预处理"——把 LLM 原生输出中的冗余字段去掉，只保留关键指标，进一步压缩了阶段 2 的输入长度。
+
 ---
 
 ## 3. 工具调用系统
 
 ### 3.1 四个工具
+
+工具是 Agent 可调用的结构化函数，遵循 OpenAI Function Calling 规范。每个工具有明确的 JSON Schema 定义（参数类型、必填字段、描述），LLM 根据这些定义自主决定何时调用哪个工具。后端负责执行并返回结果。四个工具的输入输出和设计意图如下：
 
 | 工具 | 输入 | 输出 | 用途 |
 |------|------|------|------|
@@ -259,6 +278,14 @@ flowchart TB
 | `analyze_adjacency` | — | 所有房间对的邻接关系 | LLM 分析动线 |
 | `estimate_natural_light` | room_index | 采光评分 0-100 + 等级 | LLM 评估采光 |
 | `estimate_renovation_budget` | house_type | 简装/精装/豪装预算 | LLM 给装修建议 |
+
+**`get_room_detail` 的算法**：从 YOLO 的 bbox 和 polygon 中提取：宽高（像素）、面积（像素²）、面积占比（相对整图）、通过 polygon 周长与面积的比值估算形状（正方形 / 矩形 / L 形 / 复杂多边形）、根据面积占比划分等级（超大 > 25% / 大 > 12% / 中等 > 5% / 小 > 2% / 极小）。
+
+**`analyze_adjacency` 的算法**：对每对房间计算 bbox 重叠面积和间距。间距 < 30px 判为"相邻（共享墙面）"，< 80px 判为"紧邻"，否则判为"远离"。
+
+**`estimate_natural_light` 的算法**：计算房间中心点到图片四条边的最短距离，距离越近 → 越可能靠外墙 → 采光越好。距离 < 10% 图片宽度的得 85+ 分（优秀），10-25% 得 65+（良好），25-40% 得 40+（一般），> 40% 得 25（较差）。
+
+**`estimate_renovation_budget` 的算法**：将所有房间的面积占比之和映射到实际面积（假设户型图对应 ~100m²），按简装 800 元/m²、精装 1500 元/m²、豪装 3500 元/m² 三档估算。
 
 ### 3.2 工具调用循环
 
@@ -286,6 +313,8 @@ flowchart LR
 
 ### 3.3 工具执行代码路径
 
+从 LLM 返回 `tool_calls` 到结果写入 memory，代码路径如下：
+
 ```
 agent.py: analyze()
   └─ for iteration in range(1, 8):
@@ -296,11 +325,17 @@ agent.py: analyze()
                  └─ memory.add_reasoning(session_id, step)  ← 增量写入
 ```
 
+关键点：`execute_tool` 和 `memory.add_reasoning` 在同一个循环迭代中相继执行。这意味着前端下一次轮询（最多 800ms 后）就能看到最新的工具调用结果。`execute_tool` 所需的 `context`（rooms 列表、image_size、house_type）在 `analyze()` 入口处构建，整个循环共享同一份引用。
+
 ---
 
 ## 4. 流式对话
 
 ### 4.1 SSE 流式端点
+
+对话采用 Server-Sent Events（SSE）协议实现流式输出。与普通的 HTTP 请求-响应不同，SSE 在返回 `200 OK` 后保持 TCP 连接打开，服务端持续推送数据，客户端通过 `ReadableStream` 逐块读取。
+
+之所以选择 SSE 而不是 WebSocket：对话场景是单向的（服务端推送 token，客户端只发一次消息），SSE 比 WebSocket 更轻量——不需要握手升级协议，不需要心跳保活，浏览器原生支持 `EventSource`（虽然这里用了 POST 所以走 `fetch + ReadableStream`）。
 
 ```
 POST /api/chat/{session_id}/stream
@@ -316,7 +351,15 @@ Response: text/event-stream
   data: [DONE]
 ```
 
+每个 SSE 事件是一条 `data:` 行，内容为 JSON，包含单个 token。客户端累积 token 并实时更新 React state，实现逐字渲染效果。`[DONE]` 是流结束信号，触发 `reader.read()` 返回 `done: true`，客户端断开连接。
+
 ### 4.2 流式时序
+
+流式对话的交互流程如下：用户在 ChatPanel 输入框键入问题并回车后，前端立即在消息列表尾部追加两条气泡——一条 user 角色（右对齐，紫色），一条空的 assistant 角色（左对齐，灰色占位）。然后发起 POST 请求至 `/api/chat/{session_id}/stream`，后端从 `SessionMemory` 中读取之前的分析摘要和最多 6 条历史对话，拼接为上下文，调用 `chat.completions.create(stream=True)`。
+
+LLM 每生成一个 token，OpenAI SDK 就通过 `for chunk in stream` 逐块返回，后端立即将该 token 封装为 SSE 事件写入响应流。前端 `ReadableStream` 的 `reader.read()` 循环逐块解码，每拿到一个 token 就更新 React state，assistant 气泡的内容随之增长。用户看到的效果就是文字逐字出现，类似 ChatGPT。
+
+流结束后，后端将完整的用户消息和 assistant 回复存入 `SessionMemory`，供后续对话引用。
 
 ```mermaid
 sequenceDiagram
@@ -348,6 +391,16 @@ sequenceDiagram
 
 ### 4.3 对话上下文管理
 
+每次流式对话请求，后端会从 `SessionMemory` 中拼装一个完整的上下文发送给 LLM，包含五个部分：
+
+1. **System prompt**：`"你是一个有用的AI助手，同时也是室内设计专家。可以回答装修、户型、设计相关问题，也可以闲聊。"` —— 通用的、不限制话题的角色设定，避免"只能回答室内设计问题"的僵硬感。
+2. **分析摘要**：`"之前分析：户型=两室一厅，评级=A-，6个房间。"` —— 让 LLM 知道上下文，但不塞入完整的 JSON（太长）。
+3. **确认消息**：一条 assistant 角色的 `"了解。请问想进一步了解什么？"` —— 建立对话节奏感。
+4. **历史对话**：最近 6 条 user/assistant 消息对 —— 支持多轮对话上下文。
+5. **用户新消息**：当前提问。
+
+设计上刻意不包含户型图 base64——图片 100KB+，会让流式对话的首 token 延迟显著增加。已有的分析摘要足够 LLM 理解户型背景。
+
 ```mermaid
 flowchart LR
     subgraph Context["每次 chat 请求的上下文"]
@@ -369,6 +422,16 @@ flowchart LR
 ---
 
 ## 5. 前端状态机
+
+前端的核心状态由 `useAnalysis` hook 管理，通过一个五态状态机控制 UI 渲染：
+
+- **idle**：初始状态，显示上传区。用户选择文件后进入 `uploading`。
+- **uploading**：已选择文件，显示预览图 + "开始 AI 分析"按钮。可回到 `idle`（重新选择）或进入 `loading`（点击分析）。
+- **loading**：内部又分两个子阶段——`waiting_yolo`（等待 POST /api/analyze 返回，显示"正在上传分析..."）和 `polling`（YOLO 已返回，每 800ms 轮询推理步骤，LoadingState 实时展示工具调用）。如果 fetch 失败则转入 `error`。
+- **done**：分析完成，左侧显示 FloorPlanViewer，右侧显示 AnalysisPanel（Hero + 评分 + 房间 + 推理 + 聊天）。
+- **error**：显示错误信息和"重新上传"按钮，可回到 `idle`。
+
+状态持久化：`sessionId` 在 `loading` 阶段写入后，在整个 `done` 阶段保持不变，支持页面刷新后通过 `GET /api/session/{id}` 恢复（前提是后端 memory 未重启）。
 
 ```mermaid
 stateDiagram-v2
@@ -393,6 +456,8 @@ stateDiagram-v2
 
 ## 6. 关键技术决策
 
+开发过程中遇到的几个非显而易见的坑，以及最终选择：
+
 | 决策 | 选择 | 原因 |
 |------|------|------|
 | Agent 推理与 YOLO 分离 | 后台线程 + 前端轮询 | YOLO ~1s，Agent ~15-30s，用户先看到分割结果 |
@@ -403,15 +468,47 @@ stateDiagram-v2
 | Portal 渲染全屏预览 | `createPortal` to `document.body` | 避免 sticky 容器 stacking context 遮挡 modal |
 | ErrorBoundary | 包裹左右面板 | 渲染错误不白屏，显示具体错误信息 |
 
+**关于 `max_tokens` vs `max_completion_tokens`**：这是在整个 Agent 开发中花时间最长的一个 bug。OpenAI SDK v2.x 推荐使用 `max_completion_tokens`，但旧版 `max_tokens` 仍然存在且文档未明确废弃。在 Gemini 3 Flash 上，设置 `max_tokens=4096` 后 LLM 输出始终为空字符串（HTTP 200，choices 正常，但 content 为空）。切换到 `max_completion_tokens=4096` 后问题消失。推测原因是 Gemini 3 Flash 有独立的 "thinking tokens"（推理 token，不计入输出），`max_tokens` 可能错误地将 thinking tokens 也计入限制，导致实际可用的输出 token 数为 0。
+
+**关于轮询 vs WebSocket 用于实时推理展示**：选择轮询（每 800ms GET /api/session）而不是 WebSocket，理由有三：(1) 推理步骤的实时性要求不高——800ms 延迟对"看 Agent 思考"的体验完全足够；(2) HTTP 轮询不需要额外的连接管理代码，后端无状态，重启不丢消息；(3) 轮询端点同时承担了"获取最终结果"的职责，前端逻辑统一。如果后续需要更低的延迟（如 100ms 级），可以切换到 WebSocket，但当前 800ms 的体验已经足够流畅。
+
 ---
 
 ## 7. 总结
 
-Agent 模块从最初的"两段式 Pipeline"升级为具备**工具调用、多步推理、流式对话、会话记忆**四个能力的 AI Agent：
+### 7.1 演进路径
+
+Agent 模块在开发过程中经历了三个版本：
 
 ```
-v1:  YOLO → 一次性 Prompt → LLM → JSON → 前端
+v0:  YOLO → 一次性 Prompt → LLM → JSON → 前端
+     问题：没有工具调用，LLM 凭图片"猜"房间类型和评分，准确性低
+
+v1:  YOLO → 单次调用（工具 + JSON 同 prompt）
+     问题：工具调用正确但 JSON 输出为空（上下文污染 + 注意力分散）
+
 v2:  YOLO → Phase1 工具循环 → Phase2 JSON 生成 → 前端轮询 → 实时推理展示
-        └─ ChatPanel ← SSE 流式 ← /api/chat/{id}/stream
-        └─ SessionMemory → 多轮对话上下文
+           └─ ChatPanel ← SSE 流式 ← /api/chat/{id}/stream
+           └─ SessionMemory → 多轮对话上下文
+     当前版本：四个 Agent 能力全部落地
 ```
+
+### 7.2 四个 Agent 能力
+
+| 能力 | 实现方式 | 用户感知 |
+|------|----------|----------|
+| **工具调用** | OpenAI Function Calling + 4 个 Python 工具 | 加载时看到"获取房间数据 → 分析邻接 → 评估采光 → 估算预算" |
+| **多步推理** | 两阶段架构：收集 → 生成 | 14-16 步工具调用 → 最终 JSON，推理过程可展开查看 |
+| **流式对话** | SSE + ReadableStream | 追问后 AI 回复逐字出现，不用等 |
+| **会话记忆** | SessionMemory（内存字典） | 对话引用之前分析的户型数据，支持多轮 |
+
+### 7.3 与组长仓库的关系
+
+本次分支 `feature/agent` 的改动范围严格限定在以下目录：
+
+- `apps/web-backend/` —— 全部新增
+- `apps/web-frontend/` —— 全部新增（React 项目）
+- `.gitignore` —— 增加 `.env` 一行
+- `apps/platform/pyproject.toml` —— Python 版本约束放宽 1 行
+
+未修改 `apps/platform/src/odp_platform/` 下的任何核心模块，与组长 `main` 分支的 Day6/7/8 开发零冲突，合并时不会有代码冲突。
