@@ -56,6 +56,7 @@ def test_infer_cli_builds_config_and_writes_log(tmp_path: Path) -> None:
             [
                 "--config",
                 str(yaml_path),
+                "--preflight-only",
                 "--source",
                 "demo.jpg",
                 "--save-conf",

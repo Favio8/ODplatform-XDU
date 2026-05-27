@@ -1,4 +1,4 @@
-"""Inference CLI configuration preflight."""
+"""Inference CLI entrypoint."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import Sequence
 from odp_platform.common.constants import RUNTIME_TASK_INFER, SUPPORTED_TASKS
 from odp_platform.common.logging_utils import ROOT_LOGGER_NAME, get_logger, setup_logging
 from odp_platform.common.system_utils import log_device_info
+from odp_platform.inference.service import InferenceService
 from odp_platform.runtime_config import ConfigBuildError, ConfigLoadError, build_config
 from odp_platform.runtime_config.base import ConfigTrace, RuntimeConfigBase
 
@@ -19,7 +20,7 @@ LOGGER_NAME = f"{ROOT_LOGGER_NAME}.cli.infer"
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build and audit an ODPlatform inference configuration without starting prediction."
+        description="Run ODPlatform inference with frame_source input and beautified visualization output."
     )
     parser.add_argument("--config", "--yaml", dest="config", type=Path, help="Inference YAML config path.")
     parser.add_argument("--model", help="Model weights or model identifier.")
@@ -55,6 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Logging level for the preflight, for example INFO or DEBUG.",
     )
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="Only build and audit config without starting inference.",
+    )
     return parser
 
 
@@ -85,32 +91,52 @@ def main(argv: Sequence[str] | None = None) -> int:
     logger = get_logger(LOGGER_NAME)
     log_device_info(logger)
 
+    if args.preflight_only:
+        try:
+            config, trace, warnings = build_config(
+                task_kind=RUNTIME_TASK_INFER,
+                yaml_path=str(args.config) if args.config else None,
+                cli_args=args,
+                ignored_cli_keys={"config", "log_level", "preflight_only"},
+            )
+        except (ConfigLoadError, ConfigBuildError) as exc:
+            logger.error("推理配置构建失败: %s", exc)
+            return 2
+        except KeyboardInterrupt:
+            logger.warning("推理配置构建被用户中断。")
+            return 3
+        except Exception:
+            logger.exception("推理配置构建发生未预期异常。")
+            return 3
+
+        logger.info("推理配置预检开始".center(72, "="))
+        logger.info("运行模式: 仅构建配置并记录参数溯源，不启动真实推理")
+        for warning in warnings:
+            logger.warning("%s: %s", warning.field_name, warning.message)
+
+        _log_config_info(logger, config, trace)
+        logger.info("Ultralytics kwargs: %s", config.to_ultralytics_kwargs())
+        logger.info("推理配置预检完成".center(72, "="))
+        return 0
+
     try:
-        config, trace, warnings = build_config(
-            task_kind=RUNTIME_TASK_INFER,
+        result = InferenceService().infer(
             yaml_path=str(args.config) if args.config else None,
             cli_args=args,
-            ignored_cli_keys={"config", "log_level"},
         )
-    except (ConfigLoadError, ConfigBuildError) as exc:
-        logger.error("推理配置构建失败: %s", exc)
-        return 2
     except KeyboardInterrupt:
-        logger.warning("推理配置构建被用户中断。")
+        logger.warning("推理被用户中断。")
         return 3
     except Exception:
-        logger.exception("推理配置构建发生未预期异常。")
+        logger.exception("推理执行发生未预期异常。")
         return 3
 
-    logger.info("推理配置预检开始".center(72, "="))
-    logger.info("运行模式: 仅构建配置并记录参数溯源，不启动真实推理")
-    for warning in warnings:
-        logger.warning("%s: %s", warning.field_name, warning.message)
+    if result.success:
+        logger.info("推理执行完成".center(72, "="))
+        return 0
 
-    _log_config_info(logger, config, trace)
-    logger.info("Ultralytics kwargs: %s", config.to_ultralytics_kwargs())
-    logger.info("推理配置预检完成".center(72, "="))
-    return 0
+    logger.error("推理执行失败: %s", result.error)
+    return 2
 
 
 if __name__ == "__main__":
