@@ -71,7 +71,7 @@ function FloorplanCard({
 
         <div className="flex gap-2 pt-1 border-t border-[var(--border)] mt-auto">
           <Link
-            to="/analysis"
+            to={`/analysis?recordId=${record.record_id}`}
             className="flex-1 py-1.5 px-3 text-xs text-[var(--mid-gray)] hover:text-[var(--charcoal)] border border-[var(--border)] hover:border-[var(--warm-gray)] rounded-lg transition-all flex items-center justify-center gap-1.5"
           >
             <i className="fa-solid fa-eye text-[10px]" />
@@ -131,7 +131,7 @@ export function Floorplans() {
           <p className="text-[var(--mid-gray)] text-sm">查看已上传、分割并由 Agent 分析过的户型图</p>
         </div>
         <Link
-          to="/analysis"
+          to="/analysis?mode=upload"
           className="flex items-center gap-2 px-4 py-2.5 bg-[var(--terracotta)] hover:bg-[var(--terracotta-light)] text-white rounded-xl text-sm font-medium transition-all flex-shrink-0"
         >
           <i className="fa-solid fa-plus" />
@@ -155,7 +155,7 @@ export function Floorplans() {
             上传一张户型图后，系统会保存分割结果和 Agent 装修建议，方便后续回看。
           </p>
           <Link
-            to="/analysis"
+            to="/analysis?mode=upload"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--terracotta)] text-white rounded-xl text-sm font-medium"
           >
             <i className="fa-solid fa-upload" />

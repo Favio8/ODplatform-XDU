@@ -158,6 +158,7 @@ export interface FloorplanRecord {
   };
   rooms: AgentYoloRoom[];
   room_count: number;
+  requirements?: Partial<AgentRequirements>;
   original_path: string;
   visualization_path: string;
   visualization: string;

@@ -114,7 +114,7 @@ export function Home() {
             </p>
             <div className="flex flex-wrap gap-3 animate-fade-up">
               <Link
-                to="/analysis"
+                to="/analysis?mode=upload"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--terracotta)] hover:bg-[var(--terracotta-light)] text-white rounded-xl font-medium text-sm transition-all shadow-[var(--shadow-md)] hover:shadow-[var(--shadow-lg)]"
               >
                 <i className="fa-solid fa-upload" />
@@ -215,7 +215,7 @@ export function Home() {
           <div className="card p-10 text-center">
             <i className="fa-solid fa-folder-open text-3xl text-[var(--light-gray)] mb-3" />
             <p className="text-[var(--mid-gray)] mb-3">还没有分析记录</p>
-            <Link to="/analysis" className="text-sm text-[var(--terracotta)] font-medium">
+            <Link to="/analysis?mode=upload" className="text-sm text-[var(--terracotta)] font-medium">
               上传第一张户型图 →
             </Link>
           </div>

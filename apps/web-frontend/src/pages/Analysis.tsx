@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { analyzeFloorplan, fetchAgentSession, fetchOverview, fetchServingModels, streamAgentChat } from "../lib/api";
-import type { AgentAdvice, AgentReport, AgentRequirements, AgentYoloRoom, ChatMessage, InferenceResult, RoomDisplayInfo, ServingModel } from "../types";
+import { useSearchParams } from "react-router-dom";
+import { analyzeFloorplan, fetchAgentSession, fetchFloorplan, fetchFloorplans, fetchServingModels, streamAgentChat } from "../lib/api";
+import type { AgentAdvice, AgentReport, AgentRequirements, AgentSessionResponse, AgentYoloRoom, ChatMessage, FloorplanRecord, InferenceResult, RoomDisplayInfo, ServingModel } from "../types";
 
 type ViewMode = "upload" | "analyzing" | "result";
 
@@ -20,6 +21,16 @@ const ROOM_COLORS: Record<string, string> = {
 const ROOM_COLOR_VALUES = Object.entries(ROOM_COLORS)
   .filter(([key]) => key !== "default")
   .map(([, value]) => value);
+
+const DEFAULT_REQUIREMENTS: AgentRequirements = {
+  family_size: "三口之家",
+  has_pet: false,
+  pet_type: "",
+  style: "现代简约",
+  budget: "20-35万",
+  priorities: ["收纳", "采光", "动线"],
+  notes: "",
+};
 
 type AgentRoomRaw = Record<string, unknown>;
 
@@ -127,6 +138,46 @@ function buildRequirementBasis(requirements: AgentRequirements): string {
     ...requirements.priorities,
   ].filter(Boolean);
   return basis.length ? basis.join("、") : "当前填写的居住需求";
+}
+
+function createDefaultRequirements(): AgentRequirements {
+  return {
+    ...DEFAULT_REQUIREMENTS,
+    priorities: [...DEFAULT_REQUIREMENTS.priorities],
+  };
+}
+
+function normalizeRequirements(requirements?: Partial<AgentRequirements> | null): AgentRequirements {
+  const defaults = createDefaultRequirements();
+  return {
+    family_size: typeof requirements?.family_size === "string" && requirements.family_size.trim()
+      ? requirements.family_size
+      : defaults.family_size,
+    has_pet: Boolean(requirements?.has_pet),
+    pet_type: typeof requirements?.pet_type === "string" ? requirements.pet_type : "",
+    style: typeof requirements?.style === "string" && requirements.style.trim()
+      ? requirements.style
+      : defaults.style,
+    budget: typeof requirements?.budget === "string" && requirements.budget.trim()
+      ? requirements.budget
+      : defaults.budget,
+    priorities: Array.isArray(requirements?.priorities)
+      ? requirements.priorities.map(String).filter(Boolean)
+      : defaults.priorities,
+    notes: typeof requirements?.notes === "string" ? requirements.notes : "",
+  };
+}
+
+function toChatMessages(messages: Record<string, unknown>[] | undefined): ChatMessage[] {
+  if (!Array.isArray(messages)) return [];
+  const chatMessages: ChatMessage[] = [];
+  for (const message of messages) {
+    const role = message.role === "user" || message.role === "assistant" ? message.role : null;
+    const content = typeof message.content === "string" ? message.content.trim() : "";
+    if (!role || !content) continue;
+    chatMessages.push({ role, content, status: "done" });
+  }
+  return chatMessages;
 }
 
 function downloadHtmlReport(params: {
@@ -289,6 +340,31 @@ function toInferenceResult(file: File, rooms: AgentYoloRoom[], visualization: st
       note: `置信度 ${Math.round(room.confidence * 100)}%，已进入 Agent 空间分析。`,
     })),
     summary: `YOLO 已识别 ${rooms.length} 个空间区域，分割结果已进入 Agent 分析流程。`,
+  };
+}
+
+function toInferenceResultFromRecord(record: {
+  filename: string;
+  rooms: AgentYoloRoom[];
+  visualization: string;
+  summary?: string | null;
+}): InferenceResult {
+  const confidence = record.rooms.length
+    ? record.rooms.reduce((sum, room) => sum + room.confidence, 0) / record.rooms.length
+    : 0;
+  return {
+    dataset: "room_separation_3",
+    image_name: record.filename,
+    image_path: "",
+    mask_path: `data:image/jpeg;base64,${record.visualization}`,
+    confidence,
+    regions: record.rooms.map((room, index) => ({
+      name: `Room ${room.id}`,
+      color: ROOM_COLOR_VALUES[index % ROOM_COLOR_VALUES.length],
+      area_ratio: room.area_ratio,
+      note: `置信度 ${Math.round(room.confidence * 100)}%，已进入 Agent 空间分析。`,
+    })),
+    summary: record.summary || `已恢复最近一次分析结果，共识别 ${record.rooms.length} 个空间区域。`,
   };
 }
 
@@ -570,6 +646,9 @@ function toAgentReport(analysis: Record<string, unknown> | null | undefined): Ag
 }
 
 export function Analysis() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const recordId = searchParams.get("recordId")?.trim() || "";
+  const uploadMode = searchParams.get("mode") === "upload";
   const [view, setView] = useState<ViewMode>("result");
   const [inference, setInference] = useState<InferenceResult | null>(null);
   const [agent, setAgent] = useState<AgentReport | null>(null);
@@ -590,38 +669,137 @@ export function Analysis() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatStreaming, setChatStreaming] = useState(false);
-  const [requirements, setRequirements] = useState<AgentRequirements>({
-    family_size: "三口之家",
-    has_pet: false,
-    pet_type: "",
-    style: "现代简约",
-    budget: "20-35万",
-    priorities: ["收纳", "采光", "动线"],
-    notes: "",
-  });
+  const [requirements, setRequirements] = useState<AgentRequirements>(() => createDefaultRequirements());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    Promise.allSettled([fetchOverview(), fetchServingModels()])
-      .then(([overviewResult, modelsResult]) => {
-        if (modelsResult.status === "fulfilled") {
-          setServingModels(modelsResult.value);
-          const defaultModel = modelsResult.value.find((model) => model.is_default) ?? modelsResult.value[0];
-          setSelectedModel(defaultModel?.name ?? "");
-        }
-        if (overviewResult.status !== "fulfilled") {
-          setView("upload");
-          return;
-        }
-        const data = overviewResult.value;
-        setInference(data.inference);
-        setAgent(data.agent);
-        if (data.inference?.regions?.length) setView("result");
-        else setView("upload");
-      })
-      .catch(() => setView("upload"))
-      .finally(() => setLoading(false));
+  const resetToUploadState = useCallback(() => {
+    setView("upload");
+    setUploadedFile(null);
+    setUploadPreview(null);
+    setInference(null);
+    setAgent(null);
+    setAgentAnalysis(null);
+    setAgentStatus("idle");
+    setAgentError(null);
+    setSessionId("");
+    setUsedModelName("");
+    setYoloRooms([]);
+    setImageSize(null);
+    setSelectedRoomId(null);
+    setChatMessages([]);
+    setChatInput("");
+    setChatStreaming(false);
+    setRequirements(createDefaultRequirements());
   }, []);
+
+  const hydrateFromRecord = useCallback((record: FloorplanRecord, session: AgentSessionResponse | null = null) => {
+    const analysis = session?.analysis ?? record.analysis ?? null;
+    const rooms = session?.yolo_rooms?.length ? session.yolo_rooms : record.rooms;
+    const visualization = session?.visualization || record.visualization;
+    const imageSizeValue = session?.image_size ?? record.image_size;
+    const status = session?.status ?? record.agent_status;
+
+    setView("result");
+    setUploadedFile(null);
+    setUploadPreview(visualization ? `data:image/jpeg;base64,${visualization}` : null);
+    setInference(toInferenceResultFromRecord({
+      filename: record.filename,
+      rooms,
+      visualization,
+      summary: record.summary,
+    }));
+    setAgentAnalysis(analysis);
+    setAgent(analysis ? toAgentReport(analysis) : null);
+    setAgentStatus(
+      status === "done" && analysis
+        ? "done"
+        : status === "error"
+          ? "error"
+          : status === "analyzing"
+            ? "analyzing"
+            : analysis
+              ? "done"
+              : "idle"
+    );
+    setAgentError(session?.error ?? record.agent_error ?? null);
+    setSessionId(record.session_id || "");
+    setUsedModelName("");
+    setYoloRooms(rooms);
+    setImageSize(imageSizeValue);
+    setSelectedRoomId(rooms[0]?.id ?? null);
+    setChatMessages(toChatMessages(session?.messages));
+    setChatInput("");
+    setChatStreaming(false);
+    setRequirements(normalizeRequirements(session?.requirements ?? record.requirements));
+  }, []);
+
+  const loadPersistedAnalysis = useCallback(async (): Promise<boolean> => {
+    if (uploadMode) return false;
+
+    let record: FloorplanRecord | null = null;
+    if (recordId) {
+      try {
+        record = await fetchFloorplan(recordId);
+      } catch {
+        record = null;
+      }
+    }
+
+    if (!record) {
+      const records = await fetchFloorplans();
+      record = records[0] ?? null;
+    }
+    if (!record) return false;
+
+    let session: AgentSessionResponse | null = null;
+    if (record.session_id) {
+      try {
+        session = await fetchAgentSession(record.session_id);
+      } catch {
+        session = null;
+      }
+    }
+
+    hydrateFromRecord(record, session);
+    return true;
+  }, [hydrateFromRecord, recordId, uploadMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPage() {
+      setLoading(true);
+      const [modelsResult, historyResult] = await Promise.allSettled([
+        fetchServingModels(),
+        loadPersistedAnalysis(),
+      ]);
+      if (cancelled) return;
+
+      if (modelsResult.status === "fulfilled") {
+        setServingModels(modelsResult.value);
+        const defaultModel = modelsResult.value.find((model) => model.is_default) ?? modelsResult.value[0];
+        setSelectedModel(defaultModel?.name ?? "");
+      }
+
+      const hasPersistedHistory = historyResult.status === "fulfilled" && historyResult.value;
+      if (!hasPersistedHistory) {
+        resetToUploadState();
+      }
+
+      setLoading(false);
+    }
+
+    loadPage().catch(() => {
+      if (!cancelled) {
+        resetToUploadState();
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadPersistedAnalysis, resetToUploadState]);
 
   useEffect(() => {
     if (selectedModel || servingModels.length === 0) return;
@@ -1172,13 +1350,8 @@ export function Analysis() {
           <div className="text-center">
             <button
               onClick={() => {
-                setView("upload");
-                setUploadedFile(null);
-                setUploadPreview(null);
-                setSessionId("");
-                setChatMessages([]);
-                setChatInput("");
-                setAgentAnalysis(null);
+                setSearchParams({ mode: "upload" });
+                resetToUploadState();
               }}
               className="inline-flex items-center gap-2 px-6 py-3 border border-[var(--border)] hover:border-[var(--terracotta)] text-[var(--warm-gray)] hover:text-[var(--terracotta)] rounded-xl text-sm font-medium transition-all"
             >
