@@ -18,8 +18,14 @@ class _FakeTensor:
     def cpu(self):
         return self
 
+    def int(self):
+        return _FakeTensor(self._value.astype(int))
+
     def numpy(self):
         return self._value
+
+    def tolist(self):
+        return self._value.tolist()
 
 
 class _FakeBoxes:
@@ -28,24 +34,31 @@ class _FakeBoxes:
         self.conf = _FakeTensor([0.93])
         self.cls = _FakeTensor([0])
 
+    def __len__(self) -> int:
+        return 1
+
 
 class _FakeResult:
     def __init__(self) -> None:
         self.names = {0: "ship"}
         self.boxes = _FakeBoxes()
         self.masks = None
-        self.speed = {"inference": 12.3}
+        self.speed = {"preprocess": 1.2, "inference": 12.3, "postprocess": 0.8}
 
     def save_txt(self, path: str, save_conf: bool = False) -> None:
         Path(path).write_text("0 0.5 0.5 0.4 0.3\n", encoding="utf-8")
+
+    def plot(self, labels: bool = True, conf: bool = True, boxes: bool = True, line_width=None):
+        del labels, conf, boxes, line_width
+        return np.full((24, 32, 3), 120, dtype=np.uint8)
 
 
 class _FakeYOLO:
     def __init__(self, _model_path: str) -> None:
         self.names = {0: "ship"}
 
-    def predict(self, _image, **_kwargs):
-        return [_FakeResult()]
+    def __call__(self, images, **_kwargs):
+        return [_FakeResult() for _ in images]
 
 
 def _fake_trace(config: InferConfig) -> ConfigTrace:
@@ -92,7 +105,7 @@ def test_inference_service_runs_and_saves_outputs(monkeypatch, tmp_path: Path) -
         "odp_platform.inference.service.build_infer_config",
         lambda **_kwargs: (config, trace),
     )
-    monkeypatch.setattr("odp_platform.inference.service.resolve_model_path", lambda _model: model_path)
+    monkeypatch.setattr("odp_platform.inference.service.resolve_model_path", lambda _model, search_dirs=None: model_path)
     monkeypatch.setattr("odp_platform.inference.service._load_yolo_class", lambda: _FakeYOLO)
 
     service = InferenceService()

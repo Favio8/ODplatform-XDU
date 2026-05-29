@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run ODPlatform inference with frame_source input and beautified visualization output."
     )
     parser.add_argument("--config", "--yaml", dest="config", type=Path, help="Inference YAML config path.")
+    parser.add_argument("--pipeline-yaml", dest="pipeline_yaml", type=Path, help="Frame-source/visualization YAML path.")
     parser.add_argument("--model", help="Model weights or model identifier.")
     parser.add_argument("--data", help="Dataset YAML path when needed by the model.")
     parser.add_argument("--source", help="Input source, for example image path, video path, URL, or camera index.")
@@ -31,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project", help="Output project directory.")
     parser.add_argument("--name", help="Ultralytics run name.")
     parser.add_argument("--device", help="Device expression, for example cpu, 0, or 0,1.")
+    parser.add_argument("--batch", type=int, help="Pipeline batch size for non-live sources.")
     parser.add_argument("--imgsz", type=int, help="Inference image size.")
     parser.add_argument("--conf", type=float, help="Confidence threshold.")
     parser.add_argument("--iou", type=float, help="IoU threshold.")
@@ -41,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--save-conf", dest="save_conf", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--save-crop", dest="save_crop", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--save-frames", dest="save_frames", action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument("--save", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--show", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--show-labels", dest="show_labels", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--show-conf", dest="show_conf", action=argparse.BooleanOptionalAction, default=None)
@@ -51,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stream-buffer", dest="stream_buffer", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--retina-masks", dest="retina_masks", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--visualize", action=argparse.BooleanOptionalAction, default=None)
+    parser.add_argument("--threaded", action=argparse.BooleanOptionalAction, default=None, help="Keep teacher-compatible threaded flag.")
+    parser.add_argument("--warmup", dest="warmup_frames", type=int, default=0, help="Warmup frames skipped before real inference.")
+    parser.add_argument("--window-name", dest="window_name", default="odp-infer", help="Display window title.")
+    parser.add_argument("--show-info", dest="show_info", action=argparse.BooleanOptionalAction, default=True, help="Show HUD overlay when displaying frames.")
+    parser.add_argument("--beautify", action=argparse.BooleanOptionalAction, default=True, help="Use beautified visualization instead of raw YOLO plotting.")
+    parser.add_argument("--rename-log", dest="rename_log", action=argparse.BooleanOptionalAction, default=True, help="Rename the D2 log file to match the final output directory.")
     parser.add_argument(
         "--log-level",
         default=None,
@@ -97,7 +106,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 task_kind=RUNTIME_TASK_INFER,
                 yaml_path=str(args.config) if args.config else None,
                 cli_args=args,
-                ignored_cli_keys={"config", "log_level", "preflight_only"},
+                ignored_cli_keys={
+                    "config",
+                    "pipeline_yaml",
+                    "threaded",
+                    "warmup_frames",
+                    "window_name",
+                    "show_info",
+                    "beautify",
+                    "rename_log",
+                    "log_level",
+                    "preflight_only",
+                },
             )
         except (ConfigLoadError, ConfigBuildError) as exc:
             logger.error("推理配置构建失败: %s", exc)
