@@ -226,11 +226,39 @@ def list_checkpoints() -> list[dict[str, Any]]:
     return items
 
 
-def _latest_run_dir() -> Path | None:
-    results_files = sorted((RUNS_DIR).glob("**/results.csv"), key=lambda p: p.stat().st_mtime)
-    if not results_files:
-        return None
-    return results_files[-1].parent
+def _segment_training_result_dirs() -> list[Path]:
+    result_dirs: list[Path] = []
+    for csv_path in RUNS_DIR.glob("**/results.csv"):
+        parent = csv_path.parent
+        path_str = str(parent).replace("\\", "/").lower()
+        if "segment_train" not in path_str:
+            continue
+        result_dirs.append(parent)
+    return sorted(result_dirs, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def _read_args_yaml(run_dir: Path) -> dict[str, Any]:
+    args_path = run_dir / "args.yaml"
+    return _safe_read_yaml(args_path) if args_path.exists() else {}
+
+
+def _infer_dataset_name(data_value: Any) -> str:
+    if isinstance(data_value, str) and data_value:
+        path = Path(data_value)
+        if path.suffix.lower() == ".yaml":
+            return path.stem
+        return path.name or "room_separation_3"
+    return "room_separation_3"
+
+
+def _infer_model_name(run_dir: Path, args_data: dict[str, Any]) -> str:
+    model_value = args_data.get("model")
+    if isinstance(model_value, str) and model_value:
+        return Path(model_value).name
+    best = run_dir / "weights" / "best.pt"
+    if best.exists():
+        return best.name
+    return "unknown"
 
 
 def parse_results_csv(path: Path) -> tuple[list[dict[str, float]], float | None]:
@@ -253,32 +281,32 @@ def parse_results_csv(path: Path) -> tuple[list[dict[str, float]], float | None]
 
 def list_training_runs() -> list[dict[str, Any]]:
     runs: list[dict[str, Any]] = []
-    latest_dir = latest_run_dir()
-    if latest_dir:
-        rows, metric = parse_results_csv(latest_dir / "results.csv")
+    for run_dir in _segment_training_result_dirs():
+        rows, metric = parse_results_csv(run_dir / "results.csv")
+        args_data = _read_args_yaml(run_dir)
+        best = run_dir / "weights" / "best.pt"
+        last = run_dir / "weights" / "last.pt"
         runs.append(
             {
-                "run_id": latest_dir.name,
-                "dataset": "room_separation_3",
-                "task": "segment",
-                "model": "yolov8n-seg.pt",
+                "run_id": run_dir.name,
+                "dataset": _infer_dataset_name(args_data.get("data")),
+                "task": str(args_data.get("task", "segment")),
+                "model": _infer_model_name(run_dir, args_data),
                 "epochs": int(rows[-1]["epoch"]) if rows else 0,
-                "status": "completed" if (latest_dir / "weights" / "best.pt").exists() else "running",
-                "project_dir": str(latest_dir.parent),
-                "best_checkpoint": str(latest_dir / "weights" / "best.pt") if (latest_dir / "weights" / "best.pt").exists() else None,
-                "last_checkpoint": str(latest_dir / "weights" / "last.pt") if (latest_dir / "weights" / "last.pt").exists() else None,
+                "status": "completed" if best.exists() else "running",
+                "project_dir": str(run_dir),
+                "best_checkpoint": str(best) if best.exists() else None,
+                "last_checkpoint": str(last) if last.exists() else None,
                 "metric": metric,
-                "started_at": datetime.fromtimestamp(latest_dir.stat().st_mtime).isoformat(timespec="seconds"),
+                "started_at": datetime.fromtimestamp(run_dir.stat().st_mtime).isoformat(timespec="seconds"),
             }
         )
     return runs
 
 
 def latest_run_dir() -> Path | None:
-    results_files = sorted((RUNS_DIR).glob("**/results.csv"), key=lambda p: p.stat().st_mtime)
-    if not results_files:
-        return None
-    return results_files[-1].parent
+    run_dirs = _segment_training_result_dirs()
+    return run_dirs[0] if run_dirs else None
 
 
 def latest_training_curve() -> list[dict[str, float]]:

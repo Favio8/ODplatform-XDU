@@ -10,9 +10,7 @@ from pydantic import BaseModel
 from ..services.workspace import (
     ROOT,
     list_training_runs,
-    latest_training_curve,
     parse_results_csv,
-    latest_run_dir,
 )
 
 router = APIRouter(prefix="/api", tags=["uploads"])
@@ -82,7 +80,7 @@ def get_training_curve(run_id: str) -> TrainingResultDetail:
         raise HTTPException(404, f"Training run {run_id} not found")
 
     curve_rows, metric = [], None
-    run_dir = latest_run_dir()
+    run_dir = Path(run["project_dir"])
     if run_dir and (run_dir / "results.csv").exists():
         rows, metric = parse_results_csv(run_dir / "results.csv")
         curve_rows = rows
@@ -116,7 +114,7 @@ def get_latest_curves() -> list[TrainingResultDetail]:
     results: list[TrainingResultDetail] = []
 
     for run in runs:
-        run_dir = latest_run_dir()
+        run_dir = Path(run["project_dir"])
         curve_rows = []
         metric = run.get("metric")
         if run_dir and (run_dir / "results.csv").exists():

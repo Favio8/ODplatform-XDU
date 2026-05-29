@@ -127,6 +127,11 @@ export async function fetchServingModels(): Promise<ServingModel[]> {
   return data.items;
 }
 
+export async function fetchPretrainedModels(): Promise<ServingModel[]> {
+  const data = await apiFetch<{ items: ServingModel[] }>("/models/pretrained");
+  return data.items;
+}
+
 export async function submitTrainJob(body: TrainJobCreate): Promise<JobResponse> {
   return apiFetch<JobResponse>("/jobs/train", {
     method: "POST",

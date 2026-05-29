@@ -7,14 +7,40 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[5]
 SERVING_MODELS_DIR = ROOT / "models" / "serving"
+PRETRAINED_MODELS_DIR = ROOT / "models" / "pretrained"
 CHECKPOINTS_DIR = ROOT / "models" / "checkpoints"
 DEFAULT_SERVING_MODEL_NAME = "yolo26m_seg_best.pt"
+DEFAULT_PRETRAINED_MODEL_NAMES = (
+    "yolov8n-seg.pt",
+    "yolo26n-seg.pt",
+    "yolo11m-seg.pt",
+)
 
 
 def list_serving_models() -> list[dict[str, Any]]:
     SERVING_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    models = [_model_payload(path) for path in sorted(SERVING_MODELS_DIR.glob("*.pt"))]
+    models = [
+        _model_payload(path, default_name=DEFAULT_SERVING_MODEL_NAME, label_builder=_serving_model_label)
+        for path in sorted(SERVING_MODELS_DIR.glob("*.pt"))
+    ]
     return sorted(models, key=lambda item: (not item["is_default"], item["name"]))
+
+
+def list_pretrained_models() -> list[dict[str, Any]]:
+    PRETRAINED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    default_name = _default_pretrained_model_name()
+    models = [
+        _model_payload(path, default_name=default_name, label_builder=_pretrained_model_label)
+        for path in sorted(PRETRAINED_MODELS_DIR.glob("*.pt"))
+    ]
+    return sorted(
+        models,
+        key=lambda item: (
+            not item["is_default"],
+            not _is_segment_model_name(item["name"]),
+            item["name"].lower(),
+        ),
+    )
 
 
 def default_serving_model_path() -> Path | None:
@@ -59,19 +85,39 @@ def resolve_serving_model(model_name: str | None = None) -> Path:
     return model_path
 
 
-def _model_payload(path: Path) -> dict[str, Any]:
+def _default_pretrained_model_name() -> str | None:
+    for name in DEFAULT_PRETRAINED_MODEL_NAMES:
+        if (PRETRAINED_MODELS_DIR / name).exists():
+            return name
+    segment_candidates = sorted(
+        PRETRAINED_MODELS_DIR.glob("*seg*.pt"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if segment_candidates:
+        return segment_candidates[0].name
+    first_candidate = sorted(PRETRAINED_MODELS_DIR.glob("*.pt"))
+    return first_candidate[0].name if first_candidate else None
+
+
+def _model_payload(
+    path: Path,
+    *,
+    default_name: str | None,
+    label_builder,
+) -> dict[str, Any]:
     stat = path.stat()
     return {
         "name": path.name,
         "path": str(path),
         "size_bytes": stat.st_size,
         "updated_at": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
-        "is_default": path.name == DEFAULT_SERVING_MODEL_NAME,
-        "label": _model_label(path.name),
+        "is_default": default_name is not None and path.name == default_name,
+        "label": label_builder(path.name),
     }
 
 
-def _model_label(name: str) -> str:
+def _serving_model_label(name: str) -> str:
     if name == DEFAULT_SERVING_MODEL_NAME:
         return "YOLO26m Seg Best · 推荐"
     if "26n" in name:
@@ -79,3 +125,22 @@ def _model_label(name: str) -> str:
     if "11m" in name:
         return "YOLO11m Seg Best · 高精度"
     return name.replace(".pt", "").replace("_", " ").replace("-", " ")
+
+
+def _pretrained_model_label(name: str) -> str:
+    known_labels = {
+        "yolov8n-seg.pt": "YOLOv8n-seg · 轻量分割",
+        "yolo26n-seg.pt": "YOLO26n-seg · 轻量分割",
+        "yolo11m-seg.pt": "YOLO11m-seg · 高精度分割",
+        "yolov8n.pt": "YOLOv8n · 通用预训练",
+    }
+    lower_name = name.lower()
+    if lower_name in known_labels:
+        return known_labels[lower_name]
+    stem = name.removesuffix(".pt")
+    suffix = "分割预训练" if _is_segment_model_name(name) else "通用预训练"
+    return f"{stem} · {suffix}"
+
+
+def _is_segment_model_name(name: str) -> bool:
+    return "seg" in name.lower()
