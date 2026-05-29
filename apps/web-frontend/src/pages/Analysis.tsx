@@ -43,6 +43,102 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#039;");
 }
 
+function renderInlineMarkdown(text: string, keyPrefix: string) {
+  const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean);
+  return tokens.map((token, index) => {
+    const key = `${keyPrefix}-${index}`;
+    if (token.startsWith("**") && token.endsWith("**")) {
+      return <strong key={key} className="font-semibold text-[var(--charcoal)]">{token.slice(2, -2)}</strong>;
+    }
+    if (token.startsWith("`") && token.endsWith("`")) {
+      return (
+        <code
+          key={key}
+          className="px-1.5 py-0.5 rounded-md bg-[var(--parchment)] text-[var(--charcoal)] font-mono text-[0.9em]"
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
+    }
+    return <span key={key}>{token}</span>;
+  });
+}
+
+function renderParagraphLines(text: string, keyPrefix: string) {
+  const lines = text.split("\n");
+  return lines.map((line, index) => (
+    <span key={`${keyPrefix}-line-${index}`}>
+      {renderInlineMarkdown(line, `${keyPrefix}-inline-${index}`)}
+      {index < lines.length - 1 && <br />}
+    </span>
+  ));
+}
+
+function renderMarkdownContent(content: string) {
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  if (!normalized) {
+    return <span className="text-[var(--mid-gray)]">正在组织回答...</span>;
+  }
+
+  const blocks = normalized.split(/\n\s*\n/);
+  return (
+    <div className="space-y-3">
+      {blocks.map((block, blockIndex) => {
+        const trimmed = block.trim();
+        if (!trimmed) return null;
+
+        const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+        if (heading) {
+          const level = heading[1].length;
+          const className =
+            level === 1
+              ? "text-lg font-bold text-[var(--charcoal)]"
+              : level === 2
+                ? "text-base font-bold text-[var(--charcoal)]"
+                : "text-sm font-semibold text-[var(--charcoal)]";
+          return (
+            <div key={`block-${blockIndex}`} className={className}>
+              {renderInlineMarkdown(heading[2], `heading-${blockIndex}`)}
+            </div>
+          );
+        }
+
+        const orderedLines = trimmed.split("\n").filter((line) => /^\d+\.\s+/.test(line.trim()));
+        if (orderedLines.length > 0 && orderedLines.length === trimmed.split("\n").length) {
+          return (
+            <ol key={`block-${blockIndex}`} className="list-decimal pl-5 space-y-1.5 text-[var(--warm-gray)]">
+              {orderedLines.map((line, index) => (
+                <li key={`ordered-${blockIndex}-${index}`}>
+                  {renderInlineMarkdown(line.trim().replace(/^\d+\.\s+/, ""), `ordered-${blockIndex}-${index}`)}
+                </li>
+              ))}
+            </ol>
+          );
+        }
+
+        const bulletLines = trimmed.split("\n").filter((line) => /^[-*]\s+/.test(line.trim()));
+        if (bulletLines.length > 0 && bulletLines.length === trimmed.split("\n").length) {
+          return (
+            <ul key={`block-${blockIndex}`} className="list-disc pl-5 space-y-1.5 text-[var(--warm-gray)]">
+              {bulletLines.map((line, index) => (
+                <li key={`bullet-${blockIndex}-${index}`}>
+                  {renderInlineMarkdown(line.trim().replace(/^[-*]\s+/, ""), `bullet-${blockIndex}-${index}`)}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        return (
+          <p key={`block-${blockIndex}`} className="text-[var(--warm-gray)] leading-8">
+            {renderParagraphLines(trimmed, `paragraph-${blockIndex}`)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 function extractAgentRooms(analysis: Record<string, unknown> | null): AgentRoomRaw[] {
   return Array.isArray(analysis?.rooms) ? analysis.rooms as AgentRoomRaw[] : [];
 }
@@ -567,7 +663,9 @@ function ChatPanel({
               {message.status === "streaming" ? " · 正在生成" : ""}
               {message.status === "error" ? " · 失败" : ""}
             </div>
-            {message.content || "正在组织回答..."}
+            {message.role === "assistant"
+              ? renderMarkdownContent(message.content)
+              : <p className="text-[var(--charcoal)] leading-8">{message.content || "正在组织回答..."}</p>}
           </div>
         ))}
       </div>
@@ -1073,14 +1171,23 @@ export function Analysis() {
             {/* Floor plan viz */}
             <div className="lg:col-span-3">
               <div className="card p-6 h-full">
-                <div className="flex items-center justify-between mb-5">
-                  <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
+                  <div className="min-w-0 flex-1">
                     <h2 className="text-lg font-bold text-[var(--charcoal)]" style={{ fontFamily: "var(--font-display)" }}>分割结果</h2>
-                    <p className="text-xs text-[var(--mid-gray)] mt-0.5">{inference?.image_name || (uploadedFile ? uploadedFile.name : "户型图分析")}</p>
-                    {usedModelName && <p className="text-[10px] text-[var(--light-gray)] mt-1 font-mono">Model: {usedModelName}</p>}
+                    <p
+                      className="text-xs text-[var(--mid-gray)] mt-0.5 truncate"
+                      title={inference?.image_name || (uploadedFile ? uploadedFile.name : "户型图分析")}
+                    >
+                      {inference?.image_name || (uploadedFile ? uploadedFile.name : "户型图分析")}
+                    </p>
+                    {usedModelName && (
+                      <p className="text-[10px] text-[var(--light-gray)] mt-1 font-mono truncate" title={`Model: ${usedModelName}`}>
+                        Model: {usedModelName}
+                      </p>
+                    )}
                   </div>
                   {inference?.confidence != null && inference.confidence > 0 && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--sage-pale)] text-[var(--sage)] text-xs border border-[var(--sage-light)]">
+                    <div className="self-start flex-shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--sage-pale)] text-[var(--sage)] text-xs border border-[var(--sage-light)]">
                       <i className="fa-solid fa-check" />
                       {Math.round(inference.confidence * 100)}% 置信度
                     </div>

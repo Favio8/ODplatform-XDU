@@ -12,6 +12,7 @@ import {
   submitTransformJob,
   submitValidateJob,
 } from "../lib/api";
+import { stripAnsi } from "../lib/terminal";
 import type { DatasetProfile, DatasetUploadResult, JobResponse, ProjectStatus, TransformJobCreate } from "../types";
 
 /* ─── Shared modal shell ─── */
@@ -170,6 +171,50 @@ function toTransformFormat(format: string | undefined): TransformJobCreate["form
   return "coco";
 }
 
+function summarizeJob(job: JobResponse): string {
+  const result = job.result ?? {};
+
+  if (job.task === "validate") {
+    const report = result.report as {
+      overall_severity?: string;
+      counts_by_severity?: Record<string, number>;
+      snapshot?: { total_images?: number };
+    } | undefined;
+
+    if (report) {
+      const counts = report.counts_by_severity ?? {};
+      const totalImages = report.snapshot?.total_images;
+      return [
+        `质检${report.overall_severity === "PASS" ? "通过" : "完成"}`,
+        `PASS ${counts.PASS ?? 0}`,
+        `WARNING ${counts.WARNING ?? 0}`,
+        `ERROR ${counts.ERROR ?? 0}`,
+        typeof totalImages === "number" ? `图像 ${totalImages} 张` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+  }
+
+  if (job.task === "transform") {
+    const message = typeof result.message === "string" ? result.message : "";
+    return message || "数据转换已完成。";
+  }
+
+  if (job.task === "config") {
+    const configs = Array.isArray(result.configs) ? result.configs.length : 0;
+    return configs > 0 ? `运行配置已生成 · ${configs} 个文件` : "运行配置已生成。";
+  }
+
+  if (job.task === "init") {
+    return "项目目录初始化完成。";
+  }
+
+  return stripAnsi(
+    (typeof result.message === "string" ? result.message : "") || job.stdout_tail || job.stderr_tail
+  );
+}
+
 function JobBadge({ job }: { job: JobResponse }) {
   const label = job.status === "completed" ? "已完成" : job.status === "failed" ? "失败" : job.status === "running" ? "运行中" : "等待中";
   const tone = job.status === "completed"
@@ -189,9 +234,20 @@ function JobBadge({ job }: { job: JobResponse }) {
         </div>
       )}
       <p className="mt-1 truncate font-mono opacity-80" title={job.command.join(" ")}>{job.command.join(" ")}</p>
-      {(job.error || job.stderr_tail) && (
-        <p className="mt-1 line-clamp-2 text-red-500">{(job.error || job.stderr_tail).slice(0, 160)}</p>
-      )}
+      {(() => {
+        const errorText = stripAnsi(job.error || job.stderr_tail);
+        const infoText = summarizeJob(job);
+
+        if ((job.status === "failed" || job.status === "cancelled") && errorText) {
+          return <p className="mt-1 line-clamp-2 text-red-500">{errorText.slice(0, 160)}</p>;
+        }
+
+        if (job.status === "completed" && infoText) {
+          return <p className="mt-1 line-clamp-2 text-[var(--warm-gray)]">{infoText.slice(0, 160)}</p>;
+        }
+
+        return null;
+      })()}
     </div>
   );
 }
@@ -660,6 +716,10 @@ export function Datasets() {
 
   useEffect(() => {
     load().finally(() => setLoading(false));
+    const id = setInterval(() => {
+      void load();
+    }, 3000);
+    return () => clearInterval(id);
   }, [load]);
 
   async function handleCreate(form: DatasetFormState) {

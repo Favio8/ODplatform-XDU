@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import base64
 import csv
+import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from .workspace import ROOT, RUNS_DIR
+
+WEB_JOBS_DIR = ROOT / "runs" / "web_jobs"
+ANSI_PATTERN = re.compile(
+    # Matches common ANSI escape/control sequences emitted by CLI tools.
+    # noqa: W605
+    r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+)
 
 
 ASSET_NAMES = {
@@ -104,15 +113,44 @@ def _parse_metrics(report_dir: Path) -> dict[str, float | None]:
         "fitness": None,
     }
     results_csv = report_dir / "results.csv"
-    if not results_csv.exists():
+    if results_csv.exists():
+        try:
+            rows = list(csv.DictReader(results_csv.open("r", encoding="utf-8")))
+        except Exception:
+            rows = []
+        if rows:
+            row = rows[-1]
+            aliases = {
+                "map50": ("metrics/mAP50(M)", "metrics/mAP50(B)", "mAP50"),
+                "map50_95": ("metrics/mAP50-95(M)", "metrics/mAP50-95(B)", "mAP50-95"),
+                "precision": ("metrics/precision(M)", "metrics/precision(B)", "precision"),
+                "recall": ("metrics/recall(M)", "metrics/recall(B)", "recall"),
+                "fitness": ("fitness",),
+            }
+            for key, names in aliases.items():
+                metrics[key] = _first_float(row, names)
+
+    if any(value is not None for value in metrics.values()):
         return metrics
+
+    metrics = _parse_metrics_from_audit(report_dir, metrics)
+    if any(value is not None for value in metrics.values()):
+        return metrics
+
+    return _parse_metrics_from_job_logs(report_dir, metrics)
+
+
+def _parse_metrics_from_audit(report_dir: Path, metrics: dict[str, float | None]) -> dict[str, float | None]:
+    audit_path = report_dir / "odp_audit.json"
+    if not audit_path.exists():
+        return metrics
+
     try:
-        rows = list(csv.DictReader(results_csv.open("r", encoding="utf-8")))
+        payload = json.loads(audit_path.read_text(encoding="utf-8"))
     except Exception:
         return metrics
-    if not rows:
-        return metrics
-    row = rows[-1]
+
+    overall = ((payload.get("metrics") or {}).get("overall") or {})
     aliases = {
         "map50": ("metrics/mAP50(M)", "metrics/mAP50(B)", "mAP50"),
         "map50_95": ("metrics/mAP50-95(M)", "metrics/mAP50-95(B)", "mAP50-95"),
@@ -121,7 +159,59 @@ def _parse_metrics(report_dir: Path) -> dict[str, float | None]:
         "fitness": ("fitness",),
     }
     for key, names in aliases.items():
-        metrics[key] = _first_float(row, names)
+        metrics[key] = _first_float(overall, names)
+    return metrics
+
+
+def _parse_metrics_from_job_logs(report_dir: Path, metrics: dict[str, float | None]) -> dict[str, float | None]:
+    for job_json in sorted(WEB_JOBS_DIR.glob("*/job.json"), key=lambda path: path.stat().st_mtime, reverse=True):
+        try:
+            payload = json.loads(job_json.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        if payload.get("task") != "evaluate":
+            continue
+
+        output_dir = ((payload.get("result") or {}).get("output_dir") or "").strip()
+        if not output_dir:
+            continue
+
+        try:
+            output_path = Path(output_dir).resolve()
+        except Exception:
+            continue
+        if output_path != report_dir.resolve():
+            continue
+
+        text = _strip_ansi(f"{payload.get('stdout', '')}\n{payload.get('stderr', '')}")
+        fallback_aliases = {
+            "map50": (
+                r"metrics/mAP50\(M\)\s*:\s*([0-9.]+)",
+                r"metrics/mAP50\(B\)\s*:\s*([0-9.]+)",
+            ),
+            "map50_95": (
+                r"metrics/mAP50-95\(M\)\s*:\s*([0-9.]+)",
+                r"metrics/mAP50-95\(B\)\s*:\s*([0-9.]+)",
+            ),
+            "precision": (
+                r"metrics/precision\(M\)\s*:\s*([0-9.]+)",
+                r"metrics/precision\(B\)\s*:\s*([0-9.]+)",
+            ),
+            "recall": (
+                r"metrics/recall\(M\)\s*:\s*([0-9.]+)",
+                r"metrics/recall\(B\)\s*:\s*([0-9.]+)",
+            ),
+            "fitness": (
+                r"Fitness 分数\s*:\s*([0-9.]+)",
+                r"fitness\s*:\s*([0-9.]+)",
+            ),
+        }
+        for key, patterns in fallback_aliases.items():
+            metrics[key] = _first_match_float(text, patterns)
+        return metrics
+
+    return metrics
     return metrics
 
 
@@ -136,6 +226,22 @@ def _first_float(row: dict[str, str], names: tuple[str, ...]) -> float | None:
         except ValueError:
             continue
     return None
+
+
+def _first_match_float(text: str, patterns: tuple[str, ...]) -> float | None:
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        try:
+            return float(match.group(1))
+        except (ValueError, IndexError):
+            continue
+    return None
+
+
+def _strip_ansi(value: str) -> str:
+    return ANSI_PATTERN.sub("", value or "").replace("\r", "")
 
 
 def _group_assets(report_dir: Path) -> dict[str, list[dict[str, Any]]]:
